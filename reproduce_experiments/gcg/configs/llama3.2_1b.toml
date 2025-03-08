@@ -1,0 +1,9 @@
+batch_size       = 32
+display_name     = "llama3.2_1b"
+local_files_only = true
+model_name       = "meta-llama/Llama-3.2-1B-Instruct"
+num_steps        = 600
+optim_str_init   = "x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x"
+search_width     = 1024
+temperature      = 0.1
+topk             = 256

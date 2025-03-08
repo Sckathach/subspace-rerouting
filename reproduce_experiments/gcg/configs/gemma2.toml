@@ -1,0 +1,9 @@
+batch_size     = 64
+display_name   = "gemma2_2b"
+model_name     = "google/gemma-2-2b-it"
+num_steps      = 500
+optim_str_init = "x x x x x x x x x x x x x x x x x x x x x x x"
+search_width   = 812
+separator      = "model"
+temperature    = 0.1
+topk           = 256
