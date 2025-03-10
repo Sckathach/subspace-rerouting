@@ -8,10 +8,11 @@
 
 
 ## Installation
-⚠️ The project needs **Python 3.12** ⚠️
+> [!NOTE]
+> The project needs **Python 3.12** 
 
 1. **Install the environment**
-    <details>
+    <details open>
     <summary>With miniconda (recommended way)</summary>
     Install miniconda: 
 
@@ -37,21 +38,28 @@
 
     <details>
     <summary>With python venv</summary>
+    
     ```shell 
     python -m venv .venv 
     source .venv/bin/activate
     ```
     </details>
 
-    <br />
 
 2. **Install dependencies**
+    <details open>
+    <summary>Main dependencies</summary>
+
+    This project uses Poetry to manage its dependencies (<https://python-poetry.org/>). If you get an error with the lock file (out-dated), you can remove it: `rm poetry.lock`. 
+
     ```shell
     pip install poetry 
     poetry install
     ```
 
-    Other dependencies:
+
+    </details>
+    
     <details>
     <summary>Evaluation (Optional)</summary>
 
@@ -104,7 +112,7 @@
 
 
 3. **Add tokens**
-    <details>
+    <details open>
     <summary>Hugging Face</summary>
 
     The model used are gated ones from HuggingFace, thus a token is mandatory to access them. You can get a token from your profile page: <https://huggingface.co/settings/profile>, and then ask to have access to the desired models directly on their page: 
@@ -218,6 +226,9 @@ Attempt structure:
     }]
 }
 ```
+
+## Trouble shooting 
+Text "HELP" at thomas.winninger@telecom-sudparis.eu, or open an issue :)
 
 ## TODO 
 - Hijack score experiments cleaning
