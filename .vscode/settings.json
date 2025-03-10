@@ -1,0 +1,42 @@
+{
+    "jupyter.notebookFileRoot": "${workspaceFolder}",
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "[toml]": {
+        "editor.defaultFormatter": "tamasfe.even-better-toml"
+    },
+    "editor.codeActionsOnSave": {
+        "source.fixAll.ruff": "always",
+        "source.organizeImports.ruff": "always",
+        "source.fixAll": "always"
+    },
+    "ruff.exclude": [
+        "*.ipynb"
+    ],
+    "ruff.lint.enable": true,
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+        100
+    ],
+    "evenBetterToml.formatter.allowedBlankLines": 1,
+    "evenBetterToml.formatter.arrayAutoCollapse": true,
+    "evenBetterToml.formatter.arrayAutoExpand": true,
+    "evenBetterToml.formatter.arrayTrailingComma": true,
+    "evenBetterToml.formatter.columnWidth": 100,
+    "evenBetterToml.formatter.compactArrays": true,
+    "evenBetterToml.formatter.compactEntries": true,
+    "evenBetterToml.formatter.compactInlineTables": true,
+    "evenBetterToml.formatter.indentEntries": true,
+    "evenBetterToml.formatter.indentString": "    ",
+    "evenBetterToml.formatter.indentTables": true,
+    "evenBetterToml.formatter.inlineTableExpand": true,
+    "evenBetterToml.formatter.reorderArrays": true,
+    "evenBetterToml.formatter.reorderKeys": true,
+    "evenBetterToml.formatter.trailingNewline": true,
+    "evenBetterToml.schema.enabled": true,
+    "evenBetterToml.schema.links": true,
+    "evenBetterToml.syntax.semanticTokens": false,
+    "notebook.formatOnCellExecution": true,
+    "notebook.formatOnSave.enabled": true,
+}

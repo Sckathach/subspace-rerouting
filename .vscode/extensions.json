@@ -1,0 +1,13 @@
+{
+    "recommendations": [
+        "ms-python.mypy-type-checker",
+        "mashin.mypyright",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-toolsai.jupyter-keymap",
+        "ms-toolsai.jupyter-renderers",
+        "ms-toolsai.jupyter",
+        "tamasfe.even-better-toml",
+    ]
+}

@@ -57,7 +57,6 @@
     poetry install
     ```
 
-
     </details>
     
     <details>
@@ -75,9 +74,6 @@
 
     Main libraries: `jupyter`, `matplotlib`, and `plotly`. Used in `reproduce_experiments/**/*.ipynb`. Install this group if you want to reproduce the experiments provided in the notebooks. 
 
-    If you are using VSCode, I recommend: 
-    - The following extension: <https://marketplace.visualstudio.com/items?itemName=ms-toolsai.jupyter>. 
-    - The following setting: `"jupyter.notebookFileRoot": "${workspaceFolder}"`, to access the `ssr` module from anywhere in the project (VSCode settings: <https://code.visualstudio.com/docs/editor/settings>).
     ```shell
     poetry install --with notebook
     ```
@@ -86,12 +82,7 @@
     <details>
     <summary>Developpement (Optional)</summary>
 
-    Main libraries: `mypy` and `ruff`. Install this group if you want type-checking and formatting. If you are using VSCode, you can install the following extensions: 
-    - Mypy Type Checker: <https://marketplace.visualstudio.com/items?itemName=ms-python.mypy-type-checker>
-    - MyPyright: <https://marketplace.visualstudio.com/items?itemName=mashin.mypyright>
-    - Pylance: <https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance>
-    - Ruff: <https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff>
-
+    Main libraries: `mypy` and `ruff`. Install this group if you want type-checking and formatting. 
 
     ```shell
     poetry install --with dev
