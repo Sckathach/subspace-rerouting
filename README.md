@@ -132,58 +132,14 @@
 
 ## Reproduce experiments 
 
-
-<details>
-<summary>Introduction to the project</summary>
-
-`reproduce_experiments/using_lens.ipynb`
-
-> TODO 
-</details>
-
-
-<details>
-<summary>Component attribution</summary>
-
-`reproduce_experiments/component_attribution.ipynb`
-
-> TODO 
-</details>
-
-
-<details>
-<summary>Layer differences</summary>
-
-`reproduce_experiments/layer_diffs.ipynb`
-
-> TODO 
-</details>
-
-<details>
-<summary>Evaluation</summary>
-
-`reproduce_experiments/run_ssr/`
-
-> TODO 
-</details>
-
-<details>
-<summary>nanoGCG baseline</summary>
-
-To reproduce the nanoGCG baseline, first make sure you have installed the optional dependencies `poetry install --with nanogcg`. To run the attacks, you can either use a config file: 
-
-```shell
-python reproduce_experiments/gcg/generate.py --config reproduce_experiments/gcg/configs/llama3.2_1b.toml 
-```
-
-Or use command line arguments: 
-
-```shell
-python reproduce_experiments/gcg/generate.py --model_name "meta-llama/Llama-3.2-3B-Instruct" --num_steps 32 
-```
-
-The only mandatory argument is the `model_name`. Go to the original repository: <https://github.com/GraySwanAI/nanoGCG> for more information. 
-</details>
+- Introduction to the `Lens` class used in the whole project: [`reproduce_experiments/using_lens.ipynb`](reproduce_experiments/using_lens.ipynb)
+- Component attribution: [`reproduce_experiments/component_attribution.ipynb`](reproduce_experiments/component_attribution.ipynb)
+- Layer differences: [`reproduce_experiments/layer_diffs.ipynb`](reproduce_experiments/layer_diffs.ipynb)
+- Evaluation: [`reproduce_experiments/run_ssr/run_ssr_probes.ipynb`](reproduce_experiments/run_ssr/run_ssr_probes.ipynb)
+- Out of distribution discussion: [`reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb](reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb)
+- nanoGCG baseline: [`reproduce_experiments/gcg/README.md`](reproduce_experiments/gcg/README.md)
+- Multi-layer targeting: [`reproduce_experiments/multi_layers/multi_layers.ipynb`](reproduce_experiments/multi_layers/multi_layers.ipynb)
+- Using other models: _TODO_ (Check if the model is available on Transformer Lens. Add the configuration in `models.toml`)
 
 ## Generated datasets
 Generated jailbreaks are stored in `generated_jailbreaks/`, for the moment in JSON line format. I chose JSON line as a practical solution for storing experiences. This way, each line is self-sufficient, all the information is grouped together, and there's no need to go back and forth to other files. Lines can be load either with `load_jsonl: str (filepath) -> List[dict]` (in `ssr/__init__.py`), or `load_attempts_jsonl: str (filepath) -> Attempt` (in `ssr.evaluation.py`).
