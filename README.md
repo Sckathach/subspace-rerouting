@@ -5,7 +5,7 @@
 
 </div>
 
-
+This is the repository for [Using Mechanistic Interpretability to Craft Adversarial Attacks against Large Language Models](https://arxiv.org/abs/2503.06269). 
 
 ## Installation
 > [!NOTE]
@@ -136,12 +136,14 @@
 - Component attribution: [`reproduce_experiments/component_attribution.ipynb`](reproduce_experiments/component_attribution.ipynb)
 - Layer differences: [`reproduce_experiments/layer_diffs.ipynb`](reproduce_experiments/layer_diffs.ipynb)
 - Evaluation: [`reproduce_experiments/run_ssr/run_ssr_probes.ipynb`](reproduce_experiments/run_ssr/run_ssr_probes.ipynb)
-- Out of distribution discussion: [`reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb](reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb)
+- Out of distribution discussion: [`reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb`](reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb)
 - nanoGCG baseline: [`reproduce_experiments/gcg/README.md`](reproduce_experiments/gcg/README.md)
 - Multi-layer targeting: [`reproduce_experiments/multi_layers/multi_layers.ipynb`](reproduce_experiments/multi_layers/multi_layers.ipynb)
 - Using other models: _TODO_ (Check if the model is available on Transformer Lens. Add the configuration in `models.toml`)
 
 ## Generated datasets
+Some generated datasets are available on HuggingFace: <https://huggingface.co/papers/2503.06269>. 
+
 Generated jailbreaks are stored in `generated_jailbreaks/`, for the moment in JSON line format. I chose JSON line as a practical solution for storing experiences. This way, each line is self-sufficient, all the information is grouped together, and there's no need to go back and forth to other files. Lines can be load either with `load_jsonl: str (filepath) -> List[dict]` (in `ssr/__init__.py`), or `load_attempts_jsonl: str (filepath) -> Attempt` (in `ssr.evaluation.py`).
 
 Attempt structure: 
@@ -177,8 +179,20 @@ Attempt structure:
 ## Trouble shooting 
 Text "HELP" at thomas.winninger@telecom-sudparis.eu, or open an issue :)
 
-## TODO 
+## Roadmap of the near future 
 - Hijack score experiments cleaning
-- More jailbreaks 
-- clean dataset with just jailbreak + suffix 
-- clean API config
+- More short jailbreaks 
+- nanoSSR
+
+## Citation
+If you found this repository or the paper useful, please cite as: 
+```
+@article{winninger_mechanistic_2025,
+      title={Using Mechanistic Interpretability to Craft Adversarial Attacks against Large Language Models}, 
+      author={Thomas Winninger and Boussad Addad and Katarzyna Kapusta},
+      year={2025},
+      eprint={2503.06269},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2503.06269}, 
+}
