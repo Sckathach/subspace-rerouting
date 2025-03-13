@@ -11,6 +11,7 @@ from ssr import DEVICE, PROBES_CONFIG_PATH
 from ssr.classifiers import activations_to_dataloader, train_and_test_classifier
 from ssr.core import SSR, SSRConfig
 from ssr.datasets import get_max_seq_len, load_dataset, process_dataset, scan_dataset
+from ssr.lens import Lens
 from ssr.types import HookList, Loss
 
 
@@ -28,13 +29,14 @@ class ProbeSSRConfig(SSRConfig):
     stack_act_name: str = "resid_post"
     reduce_seq_method: Literal["mean", "max", "last"] = "last"
 
+    system_message: str = "You are a helpful assistant"
+
 
 class ProbeSSR(SSR):
-    def __init__(
-        self, model: tl.HookedTransformer, config: ProbeSSRConfig, device: str = DEVICE
-    ):
-        super().__init__(model, config, device)
+    def __init__(self, lens: Lens, config: ProbeSSRConfig, device: str = DEVICE):
+        super().__init__(lens.model, config)
 
+        self.lens = lens
         self.config: ProbeSSRConfig = config
 
         self.probes: Dict[int, Tuple[t.nn.Module, float, Loss]] = {}
@@ -63,13 +65,13 @@ class ProbeSSR(SSR):
         hf_raw, hl_raw = load_dataset(self.config.dataset_name)
 
         seq_len = (
-            get_max_seq_len(self, hf_raw, hl_raw)[0]
+            get_max_seq_len(self.lens, hf_raw, hl_raw)[0]
             if not self.config.padding
             else None
         )
 
         hf, hl = process_dataset(
-            self,
+            self.lens,
             hf_raw,
             hl_raw,
             padding_side=self.config.padding_side,
@@ -79,7 +81,7 @@ class ProbeSSR(SSR):
         )
 
         hf_act, hl_act = scan_dataset(
-            self,
+            self.lens,
             hf,
             hl,
             pattern=self.config.pattern,

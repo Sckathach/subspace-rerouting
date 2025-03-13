@@ -1,74 +1,67 @@
 [project]
-name = "subspace-rerouting"
-version = "0.1.0"
-description = ""
-authors = [
-    {name = "Sckathach",email = "thomas.winninger68@gmail.com"}
-]
-readme = "README.md"
-requires-python = ">=3.12,<3.13"
-dependencies = [
-    "transformer-lens (>=2.15.0,<3.0.0)",
-    "toml (>=0.10.2,<0.11.0)",
-    "python-dotenv (>=1.0.1,<2.0.0)",
-    "scikit-learn (>=1.6.1,<2.0.0)"
-]
-
+    authors=[{name="Sckathach", email="thomas.winninger68@gmail.com"}]
+    dependencies=[
+        "python-dotenv (>=1.0.1,<2.0.0)",
+        "scikit-learn (>=1.6.1,<2.0.0)",
+        "toml (>=0.10.2,<0.11.0)",
+        "transformer-lens (>=2.15.0,<3.0.0)",
+    ]
+    description=""
+    name="subspace-rerouting"
+    readme="README.md"
+    requires-python=">=3.12,<3.13"
+    version="0.1.0"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+    build-backend="poetry.core.masonry.api"
+    requires=["poetry-core>=2.0.0,<3.0.0"]
 
 [tool.poetry.group.dev]
-optional = true
+    optional=true
 
-[tool.poetry.group.dev.dependencies]
-ruff = "^0.9.10"
-mypy = "^1.15.0"
+    [tool.poetry.group.dev.dependencies]
+        mypy="^1.15.0"
+        ruff="^0.9.10"
 
 [tool.poetry.group.notebook]
-optional = true
+    optional=true
 
-[tool.poetry.group.notebook.dependencies]
-jupyter = "^1.1.1"
-ipykernel = "^6.29.5"
-ipywidgets = "^8.1.5"
-matplotlib = "^3.10.1"
-notebook = "^7.3.2"
-plotly = "^6.0.0"
+    [tool.poetry.group.notebook.dependencies]
+        ipykernel="^6.29.5"
+        ipywidgets="^8.1.5"
+        jupyter="^1.1.1"
+        matplotlib="^3.10.1"
+        notebook="^7.3.2"
+        plotly="^6.0.0"
 
 [tool.poetry.group.api]
-optional = true
+    optional=true
 
-[tool.poetry.group.api.dependencies]
-ollama = "^0.4.7"
-openai = "^1.65.4"
+    [tool.poetry.group.api.dependencies]
+        google-genai="^1.5.0"
+        ollama="^0.4.7"
+        openai="^1.65.4"
 
 [tool.poetry.group.nanogcg]
-optional = true
+    optional=true
 
-[tool.poetry.group.nanogcg.dependencies]
-nanogcg = "^0.3.0"
-bitsandbytes = "^0.45.3"
+    [tool.poetry.group.nanogcg.dependencies]
+        bitsandbytes="^0.45.3"
+        nanogcg="^0.3.0"
 
 [tool.poetry]
-package-mode = false
+    package-mode=false
 
 [[tool.mypy.overrides]]
-ignore_missing_imports = true
-module = [
-    "nanogcg.*",
-    "plotly.*",
-    "sklearn.*",
-    "transformer_lens.*",
-    "transformers.*",
-]
+    ignore_missing_imports=true
+    module=[
+        "accelerate.*",
+        "nanogcg.*",
+        "plotly.*",
+        "sklearn.*",
+        "transformer_lens.*",
+        "transformers.*",
+    ]
 
 [tool.pyright]
-ignore = [
-    "nanogcg",
-    "plotly",
-    "sklearn",
-    "transformer_lens",
-    "transformers",
-]
+    ignore=["accelerate", "nanogcg", "plotly", "sklearn", "transformer_lens", "transformers"]
