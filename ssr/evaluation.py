@@ -9,11 +9,12 @@ import transformer_lens as tl
 from ollama import Options, chat
 from openai import OpenAI
 from pydantic import BaseModel
+from rich import print
 
 from ssr.files import get_template
 from ssr.lens import model_info
+from ssr.probes import ProbeSSRConfig
 from ssr.ssr_attention import AttentionSSRConfig
-from ssr.ssr_probes import ProbeSSRConfig
 from ssr.ssr_steering import SteeringSSRConfig
 
 dotenv.load_dotenv()
@@ -197,7 +198,7 @@ def call_lmstudio_embeddings(
     )
 
 
-def call_lmstudio(model_name: str, prompt: str, **kwargs) -> str:
+def call_lmstudio(model_name: str, prompt: str, verbose: bool = False, **kwargs) -> str:
     model_name = cast(str, model_info(model_name).get("model_name", model_name))
 
     client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
@@ -210,6 +211,13 @@ def call_lmstudio(model_name: str, prompt: str, **kwargs) -> str:
 
     if params.system_message is not None:
         messages = [{"role": "system", "content": params.system_message}] + messages
+
+    if verbose:
+        print(f"""[blue]Calling LM Studio with: 
+            {messages}
+
+            Config: {params}[/]
+        """)
 
     response = (
         client.chat.completions.create(

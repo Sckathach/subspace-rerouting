@@ -20,9 +20,7 @@ DATASETS_PATH = os.getenv(
 MODELS_PATH = os.getenv(
     "MODELS_PATH", Path(PROJECT_PATH / ".." / "models.toml").resolve()
 )
-PROBES_CONFIG_PATH = os.getenv(
-    "PROBES_CONFIG_PATH", Path(PROJECT_PATH / ".." / "probes_config.json").resolve()
-)
+
 TEMPLATES_PATH = os.getenv("TEMPLATES_PATH", Path(PROJECT_PATH / "templates").resolve())
 
 

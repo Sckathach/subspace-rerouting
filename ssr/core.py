@@ -9,10 +9,12 @@ from jaxtyping import Float, Int
 from pydantic import BaseModel
 from rich import print
 
+from ssr.lens import get_surname, model_info
 from ssr.types import HookList, Tokenizer
 
 
 class SSRConfig(BaseModel):
+    model_name: str
     search_width: int = 256
     search_topk: int = 64
     buffer_size: int = 10
@@ -20,12 +22,13 @@ class SSRConfig(BaseModel):
     n_replace: Optional[int] = None
     max_layer: int = -1
     patience: int = 10
+    allow_non_ascii: bool = False
+    early_stop_loss: float = 0.05
+    max_iterations: int = 60
 
 
 class SSR:
-    def __init__(
-        self, model: tl.HookedTransformer, config: Optional[SSRConfig] = None
-    ) -> None:
+    def __init__(self, model: tl.HookedTransformer, config: SSRConfig) -> None:
         self.model = model
         self.device = self.model.cfg.device
 
@@ -35,7 +38,7 @@ class SSR:
             raise ValueError("model.tokenizer is supposed not None")
         self.tokenizer = cast(Tokenizer, self.model.tokenizer)
 
-        self.config = config if config is not None else SSRConfig()
+        self.config = config
         if self.config.max_layer < 0:
             self.config.max_layer += self.model.cfg.n_layers
 
@@ -79,6 +82,18 @@ class SSR:
         self.full_embeds = t.embedding(self.model.W_E, self.full_tokens)
         self.mask_positions = t.Tensor(mask_positions).to(self.model.cfg.device).long()
 
+    def get_tokens(
+        self, masked_tokens: Int[t.Tensor, "batch_size mask_len"]
+    ) -> Int[t.Tensor, "batch_size seq_len"]:
+        full_tokens = (
+            self.full_tokens.clone()
+            .to(masked_tokens.device)
+            .unsqueeze(0)
+            .repeat(masked_tokens.shape[0], 1)
+        )
+        full_tokens[:, self.mask_positions] = masked_tokens
+        return full_tokens
+
     def buffer_init_random(self):
         # TODO: filter ids
         candidate_ids = (
@@ -101,24 +116,27 @@ class SSR:
             find_executable_batch_size(
                 self.compute_candidate_losses, self.config.buffer_size
             )(candidate_full_embeds),
-        )
-        self.candidate_ids = t.empty(0, dtype=candidate_ids.dtype)
+        ).squeeze(-1)
+        self.candidate_ids = t.empty(0, dtype=candidate_ids.dtype).to(self.device)
         self.candidate_losses = t.empty(0, dtype=candidate_losses.dtype)
         self.archive_ids = t.empty(0, dtype=candidate_ids.dtype)
         self.archive_losses = t.empty(0, dtype=candidate_losses.dtype)
-        self.buffer_add(candidate_ids, candidate_losses)
+        self.buffer_add(candidate_ids, candidate_losses, update_n_replace=False)
+        self.initial_loss = self.candidate_losses[0].item()
+        self.n_replace = len(self.mask_positions)
 
     def buffer_add(
         self,
         candidates_ids: Int[t.Tensor, "search_width adv_len"],
         losses: Float[t.Tensor, "search_width"],
+        update_n_replace: bool = True,
     ):
         best_loss_before = (
             self.candidate_losses[0].item() if len(self.candidate_losses) > 0 else 666.0
         )
 
         pool = t.cat([self.candidate_losses, losses.cpu()], dim=-1)
-        ordered_pool = t.topk(pool, k=pool.shape[0], largest=False)
+        ordered_pool = t.topk(pool, k=pool.shape[0], largest=False, dim=0)
 
         duplicate_mask = t.cat(
             [
@@ -142,13 +160,16 @@ class SSR:
             print(f""" 
                 [b][yellow]Best loss: {self.candidate_losses[0]:.3f}, with ids: {self.candidate_ids[0]}
             """)
-        self.update_n_replace()
+        if update_n_replace:
+            self.update_n_replace()
 
     def buffer_jump(self):
         jump_idx = t.multinomial(t.softmax(-self.candidate_losses, dim=-1), 1)
 
         print(
-            f"[b][red]Patience max reached, jumping from {self.candidate_ids[0]} with {self.candidate_losses[0]} to {self.candidate_ids[jump_idx]} with {self.candidate_losses[jump_idx]} ({jump_idx.item()} jump)[/][/]"
+            f"[b][red]Patience max reached, jumping from {self.candidate_ids[0]} with"
+            f"{self.candidate_losses[0]} to {self.candidate_ids[jump_idx]} with"
+            f"{self.candidate_losses[jump_idx]} ({jump_idx.item()} jump)[/][/]"
         )
         self.archive_ids = t.cat(
             [
@@ -205,9 +226,58 @@ class SSR:
 
         return t.stack(filtered_tokens)
 
-    def sample_ids_from_grad(self, ids: t.Tensor, grad: t.Tensor):
-        n_optim_tokens = len(ids)
+    def get_restricted_tokens(
+        self, restricted_tokens_list: Optional[List[str | int]] = None
+    ) -> Int[t.Tensor, "n_restricted_tokens"]:
+        restricted_tokens = t.tensor(self.tokenizer.all_special_ids)
 
+        if (
+            self.config.model_name is not None
+            and (
+                restricted_tokens_list := cast(
+                    Optional[List[str | int]],
+                    model_info(get_surname(self.config.model_name)).get(
+                        "restricted_tokens"
+                    ),
+                )
+            )
+        ) or restricted_tokens_list is not None:
+            for token in restricted_tokens_list:
+                if isinstance(token, str):
+                    restricted_tokens = t.cat(
+                        [
+                            restricted_tokens,
+                            t.arange(
+                                int(token.split("-")[0]), int(token.split("-")[1])
+                            ),
+                        ]
+                    )
+                else:
+                    restricted_tokens = t.cat([restricted_tokens, t.Tensor(token)])
+
+        if not self.config.allow_non_ascii:
+            decoded_vocabulary = self.tokenizer.batch_decode(
+                list(range(self.tokenizer.vocab_size))
+            )
+
+            def is_ascii(s: str) -> bool:
+                return s.isascii() and s.isprintable()
+
+            non_ascii_toks = []
+
+            for i, v in enumerate(decoded_vocabulary):
+                if not is_ascii(v):
+                    non_ascii_toks.append(i)
+
+            restricted_tokens = t.cat(
+                [restricted_tokens, t.tensor(non_ascii_toks)], dim=0
+            )
+
+        return restricted_tokens.to(self.device).long()
+
+    def sample_ids_from_grad(
+        self, ids: Int[t.Tensor, "mask_len"], grad: Float[t.Tensor, "mask_len"]
+    ):
         original_ids = ids.repeat(self.config.search_width, 1)
 
         if self.not_allowed_ids is not None:
@@ -216,7 +286,9 @@ class SSR:
         topk_ids = (-grad).topk(self.config.search_topk, dim=1).indices
 
         sampled_ids_pos = t.argsort(
-            t.rand((self.config.search_width, n_optim_tokens), device=grad.device)
+            t.rand(
+                (self.config.search_width, len(self.mask_positions)), device=grad.device
+            )
         )[..., : self.n_replace]
 
         sampled_ids_val = t.gather(
@@ -235,8 +307,8 @@ class SSR:
         return new_ids
 
     def loss_fn(
-        self, activations: Float[t.Tensor, "... d_model"]
-    ) -> Float[t.Tensor, "... 1"]:
+        self, activations: Float[t.Tensor, "batch_size ..."]
+    ) -> Float[t.Tensor, "batch_size"]:
         raise NotImplementedError
 
     def compute_gradients(
@@ -289,11 +361,11 @@ class SSR:
 
                 output, input_embeds_batch = release_memory(output, input_embeds_batch)
 
-        return t.cat(all_loss, dim=0).squeeze(1)
+        return t.cat(all_loss, dim=0)
 
-    def generate(self, nb_iterations: int) -> None:
+    def generate(self) -> None:
         last_update = 0
-        for i in tqdm.tqdm(range(nb_iterations)):
+        for i in tqdm.tqdm(range(self.config.max_iterations)):
             optim_ids = self.candidate_ids[0].clone()
             optim_ids_one_hot = (
                 t.nn.functional.one_hot(optim_ids, self.model.cfg.d_vocab)
@@ -309,25 +381,30 @@ class SSR:
 
                 candidate_ids = self.filter_tokens(candidate_ids)
 
-                new_search_width = candidate_ids.shape[0]
-
-                candidates_embeds = t.embedding(
-                    self.model.W_E, candidate_ids.long().to(self.device)
+                candidate_full_embeds = (
+                    self.full_embeds.clone()
+                    .unsqueeze(0)
+                    .repeat(candidate_ids.shape[0], 1, 1)
+                )
+                candidate_full_embeds[:, self.mask_positions, :] = t.embedding(
+                    self.model.W_E, candidate_ids
+                )
+                candidate_losses = cast(
+                    Float[t.Tensor, "new_search_width"],
+                    find_executable_batch_size(
+                        self.compute_candidate_losses, candidate_full_embeds.shape[0]
+                    )(candidate_full_embeds),
                 )
 
-                losses = cast(
-                    Float[t.Tensor, "new_search_width 1"],
-                    find_executable_batch_size(
-                        self.compute_candidate_losses, new_search_width
-                    )(candidates_embeds),
-                ).squeeze(-1)
+                self.buffer_add(candidate_ids, candidate_losses)
 
-                self.buffer_add(candidate_ids, losses)
+                losses, candidate_embeds, candidate_full_ids = release_memory(
+                    candidate_losses, candidate_full_embeds, candidate_ids
+                )
 
                 if i - last_update > self.config.patience:
                     last_update = i
                     self.buffer_jump()
 
-                losses, candidates_embeds, candidate_ids = release_memory(
-                    losses, candidates_embeds, candidate_ids
-                )
+                if self.candidate_losses[0] < self.config.early_stop_loss:
+                    break
