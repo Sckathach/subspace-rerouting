@@ -184,8 +184,8 @@ Text "HELP" at thomas.winninger@telecom-sudparis.eu, or open an issue :)
 - [ ] More short jailbreaks &rarr; on the way (75%)
 - SSR v4 &rarr; dev branch 
     - [x] ~~suffix~~ &rarr; general
-    - [ ] Save and load probes instead of recomputing each time (90%)
-    - [ ] Same for refusal directions
+    - [x] Save and load probes instead of recomputing each time 
+    - [x] Same for refusal directions
     - [ ] nanoSSR (60%)
 - [ ] Comments
 

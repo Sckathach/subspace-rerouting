@@ -9,7 +9,6 @@ from jaxtyping import Float, Int
 from pydantic import BaseModel
 from rich import print
 
-from ssr.lens import get_surname, model_info
 from ssr.types import HookList, Tokenizer
 
 
@@ -22,7 +21,6 @@ class SSRConfig(BaseModel):
     n_replace: Optional[int] = None
     max_layer: int = -1
     patience: int = 10
-    allow_non_ascii: bool = False
     early_stop_loss: float = 0.05
     max_iterations: int = 60
 
@@ -199,82 +197,6 @@ class SSR:
             print(f"Decreasing n_replace from {self.n_replace} to {new_n_replace}")
             self.n_replace = new_n_replace
 
-    def filter_tokens(
-        self, tokens: Int[t.Tensor, "batch seq_len"]
-    ) -> Int[t.Tensor, "new_batch seq_len"]:
-        str_tokens = self.tokenizer.batch_decode(tokens)
-        filtered_tokens = []
-
-        for i in range(len(str_tokens)):
-            # Retokenize the decoded token ids
-            ids_encoded = (
-                self.tokenizer(
-                    str_tokens[i], return_tensors="pt", add_special_tokens=False
-                )
-                .to(tokens.device)
-                .input_ids[0]
-            )
-            if t.equal(tokens[i], ids_encoded):
-                filtered_tokens.append(tokens[i])
-
-        if not filtered_tokens:
-            # This occurs in some cases, e.g. using the Llama-3 tokenizer with a bad initialization
-            raise RuntimeError(
-                "No token sequences are the same after decoding and re-encoding. "
-                "Consider setting `filter_ids=False` or trying a different `optim_str_init`"
-            )
-
-        return t.stack(filtered_tokens)
-
-    def get_restricted_tokens(
-        self, restricted_tokens_list: Optional[List[str | int]] = None
-    ) -> Int[t.Tensor, "n_restricted_tokens"]:
-        restricted_tokens = t.tensor(self.tokenizer.all_special_ids)
-
-        if (
-            self.config.model_name is not None
-            and (
-                restricted_tokens_list := cast(
-                    Optional[List[str | int]],
-                    model_info(get_surname(self.config.model_name)).get(
-                        "restricted_tokens"
-                    ),
-                )
-            )
-        ) or restricted_tokens_list is not None:
-            for token in restricted_tokens_list:
-                if isinstance(token, str):
-                    restricted_tokens = t.cat(
-                        [
-                            restricted_tokens,
-                            t.arange(
-                                int(token.split("-")[0]), int(token.split("-")[1])
-                            ),
-                        ]
-                    )
-                else:
-                    restricted_tokens = t.cat([restricted_tokens, t.Tensor(token)])
-
-        if not self.config.allow_non_ascii:
-            decoded_vocabulary = self.tokenizer.batch_decode(
-                list(range(self.tokenizer.vocab_size))
-            )
-
-            def is_ascii(s: str) -> bool:
-                return s.isascii() and s.isprintable()
-
-            non_ascii_toks = []
-
-            for i, v in enumerate(decoded_vocabulary):
-                if not is_ascii(v):
-                    non_ascii_toks.append(i)
-
-            restricted_tokens = t.cat(
-                [restricted_tokens, t.tensor(non_ascii_toks)], dim=0
-            )
-
-        return restricted_tokens.to(self.device).long()
-
     def sample_ids_from_grad(
         self, ids: Int[t.Tensor, "mask_len"], grad: Float[t.Tensor, "mask_len"]
     ):
@@ -379,7 +301,7 @@ class SSR:
             with t.no_grad():
                 candidate_ids = self.sample_ids_from_grad(optim_ids, grad)
 
-                candidate_ids = self.filter_tokens(candidate_ids)
+                candidate_ids = filter_tokens(self.tokenizer, candidate_ids)
 
                 candidate_full_embeds = (
                     self.full_embeds.clone()
@@ -408,3 +330,65 @@ class SSR:
 
                 if self.candidate_losses[0] < self.config.early_stop_loss:
                     break
+
+
+def get_restricted_tokens(
+    tokenizer: Tokenizer, restricted_tokens_list: List[str | int]
+) -> Int[t.Tensor, "n_restricted_tokens"]:
+    restricted_tokens = t.tensor(tokenizer.all_special_ids)
+    for token in restricted_tokens_list:
+        if isinstance(token, str):
+            if token == "non-ascii":
+                decoded_vocabulary = tokenizer.batch_decode(
+                    list(range(tokenizer.vocab_size))
+                )
+
+                def is_ascii(s: str) -> bool:
+                    return s.isascii() and s.isprintable()
+
+                non_ascii_toks = []
+
+                for i, v in enumerate(decoded_vocabulary):
+                    if not is_ascii(v):
+                        non_ascii_toks.append(i)
+
+                restricted_tokens = t.cat(
+                    [restricted_tokens, t.tensor(non_ascii_toks)], dim=0
+                )
+            else:
+                restricted_tokens = t.cat(
+                    [
+                        restricted_tokens,
+                        t.arange(int(token.split("-")[0]), int(token.split("-")[1])),
+                    ]
+                )
+        else:
+            restricted_tokens = t.cat([restricted_tokens, t.Tensor(token)])
+
+    return restricted_tokens.long()
+
+
+def filter_tokens(
+    tokenizer: Tokenizer, tokens: Int[t.Tensor, "batch seq_len"]
+) -> Int[t.Tensor, "new_batch seq_len"]:
+    str_tokens = tokenizer.batch_decode(tokens)
+    filtered_tokens = []
+
+    for i in range(len(str_tokens)):
+        # Retokenize the decoded token ids
+        ids_encoded = (
+            tokenizer(str_tokens[i], return_tensors="pt", add_special_tokens=False)
+            .to(tokens.device)
+            .input_ids[0]
+        )
+        if t.equal(tokens[i], ids_encoded):
+            filtered_tokens.append(tokens[i])
+
+    if not filtered_tokens:
+        # This occurs in some cases, e.g. using the Llama-3 tokenizer with a bad initialization
+        raise RuntimeError(
+            "No token sequences are the same after decoding and re-encoding. "
+            "Consider setting `filter_ids=False` or trying a different `optim_str_init`"
+        )
+
+    return t.stack(filtered_tokens)

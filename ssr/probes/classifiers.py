@@ -1,16 +1,9 @@
-import datetime
-import json
-import os
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import torch as t
-import tqdm
 from jaxtyping import Float
-from pydantic import PositiveInt
 from torch.utils.data import DataLoader, TensorDataset
 
-from ssr.datasets import get_max_seq_len, load_dataset, process_dataset, scan_dataset
-from ssr.lens import Lens
 from ssr.types import Loss, Optimizer
 
 
@@ -208,102 +201,3 @@ def print_results(
         )
     console = rich.console.Console()
     console.print(table)
-
-
-def init_probes(
-    lens: Lens,
-    model_name: str,
-    loss_names: List[str],
-    optimizer_names: List[str],
-    lrs: List[float],
-    epochs: List[int],
-    save_directory: str,
-    dataset_name: Literal["mod", "adv", "mini", "bomb"] = "mod",
-    padding: bool = True,
-    padding_side: str = "left",
-    max_samples: PositiveInt = 124,
-    pattern: str = "resid_post",
-    stack_act_name: str = "resid_post",
-    reduce_seq_method: Literal["mean", "max", "last"] = "last",
-    system_message: str = "You are a helpful assistant",
-    device: Optional[str] = None,
-    verbose: bool = False,
-):
-    if device is None:
-        device = lens.model.cfg.device
-
-    os.makedirs(save_directory, exist_ok=True)
-
-    hf_raw, hl_raw = load_dataset(dataset_name)
-
-    seq_len = get_max_seq_len(lens, hf_raw, hl_raw)[0] if not padding else None
-
-    hf, hl = process_dataset(
-        lens,
-        hf_raw,
-        hl_raw,
-        padding_side=padding_side,
-        max_samples=max_samples,
-        system_message=system_message,
-        seq_len=seq_len,
-    )
-
-    hf_act, hl_act = scan_dataset(
-        lens,
-        hf,
-        hl,
-        pattern=pattern,
-        stack_act_name=stack_act_name,
-        reduce_seq_method=reduce_seq_method,
-    )
-
-    probes_metrics = []
-
-    for layer, loss_name, optimizer, lr, epochs_ in tqdm.tqdm(
-        zip(range(lens.model.cfg.n_layers), loss_names, optimizer_names, lrs, epochs)
-    ):
-        train_loader, test_loader, _ = activations_to_dataloader(
-            hf_act[layer], hl_act[layer]
-        )
-        classifier, _, metrics = train_and_test_classifier(
-            train_loader,
-            test_loader,
-            d_model=lens.model.cfg.d_model,
-            loss_name=loss_name,
-            optimizer_name=optimizer,
-            lr=lr,
-            epochs=epochs_,
-        )
-        classifier = classifier.to(device).float().eval()
-        for param in classifier.parameters():
-            param.requires_grad = False
-
-        if verbose:
-            print(f"Trained probe at layer: {layer}, with metrics: {metrics}.")
-
-        probes_metrics.append(metrics)
-
-        probe_path = os.path.join(save_directory, f"{model_name}_{layer}.pt")
-        probe_info = {"state_dict": classifier.state_dict(), "loss_name": loss_name}
-        t.save(probe_info, probe_path)
-
-    with open(os.path.join(save_directory, "metadata.json"), "w") as f:
-        json.dump(
-            {
-                "model_name": model_name,
-                "dataset_name": dataset_name,
-                "loss_names": loss_names,
-                "optimizer_names": optimizer_names,
-                "lrs": lrs,
-                "epochs": epochs,
-                "max_samples": max_samples,
-                "system_message": system_message,
-                "pattern": pattern,
-                "metrics": probes_metrics,
-                "stack_act_name": stack_act_name,
-                "reduce_seq_method": reduce_seq_method,
-                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
-            },
-            f,
-            indent=4,
-        )
