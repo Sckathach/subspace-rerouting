@@ -180,10 +180,14 @@ Attempt structure:
 Text "HELP" at thomas.winninger@telecom-sudparis.eu, or open an issue :)
 
 ## Roadmap of the near future 
-- Hijack score experiments cleaning
-- More short jailbreaks &rarr; on the way
-- SSR v4 (~~suffix~~ &rarr; general) &rarr; dev branch 
-- Comments
+- [ ] Hijack score experiments cleaning
+- [ ] More short jailbreaks &rarr; on the way (75%)
+- SSR v4 &rarr; dev branch 
+    - [x] ~~suffix~~ &rarr; general
+    - [ ] Save and load probes instead of recomputing each time (90%)
+    - [ ] Same for refusal directions
+    - [ ] nanoSSR (60%)
+- [ ] Comments
 
 ## Citation
 If you found this repository or the paper useful, please cite as: 
