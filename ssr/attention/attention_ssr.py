@@ -6,7 +6,6 @@ from jaxtyping import Float
 from pydantic import BaseModel
 
 from ssr.core import SSR, SSRConfig
-from ssr.lens import Lens
 from ssr.types import HookList
 
 
@@ -44,12 +43,11 @@ class AttentionSSRConfig(SSRConfig):
 class AttentionSSR(SSR):
     def __init__(
         self,
-        lens: Lens,
+        model: tl.HookedTransformer,
         config: AttentionSSRConfig,
     ):
-        super().__init__(lens.model, config)
+        super().__init__(model, config)
 
-        self.lens = lens
         self.config: AttentionSSRConfig = config
 
         self.act_dict: Dict[str, t.Tensor] = {}

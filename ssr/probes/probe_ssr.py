@@ -9,8 +9,9 @@ from pydantic import PositiveInt
 
 from ssr import PROBES_CONFIG_PATH, PROBES_WEIGTHS_PATH
 from ssr.core import SSR, SSRConfig
+from ssr.defaults import DEFAULT_VALUE, DefaultValue
 from ssr.files import load_metadata, load_weights, save_metadata, save_weights
-from ssr.lens import DEFAULT_VALUE, DefaultValue, Lens
+from ssr.lens import Lens
 from ssr.probes.classifiers import (
     LinearClassifier,
     activations_to_dataloader,

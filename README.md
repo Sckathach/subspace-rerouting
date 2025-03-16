@@ -176,6 +176,9 @@ Attempt structure:
 }
 ```
 
+## To type or not to type, that is the eternal question
+![dependency graph](/assets/graph.svg)
+
 ## Trouble shooting 
 Text "HELP" at thomas.winninger@telecom-sudparis.eu, or open an issue :)
 
@@ -201,3 +204,4 @@ If you found this repository or the paper useful, please cite as:
       primaryClass={cs.LG},
       url={https://arxiv.org/abs/2503.06269}, 
 }
+```

@@ -10,43 +10,25 @@ from typing import (
     overload,
 )
 
+import toml
 import torch as t
 import transformer_lens as tl
-from accelerate.utils.memory import find_executable_batch_size, release_memory
+from accelerate.utils.memory import (
+    release_memory,
+)
 from jaxtyping import Float, Int
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from tqdm import tqdm
 from transformers import BatchEncoding
 
-from ssr import DEVICE, TEMPLATES_PATH
+from ssr import DEVICE, MODELS_PATH, TEMPLATES_PATH
+from ssr.defaults import DEFAULT_VALUE, DefaultValue, underload
 from ssr.files import load_dataset
+from ssr.memory import find_executable_batch_size
 from ssr.types import HookList, Tokenizer
 
 
-class DefaultValue:
-    pass
-
-
-DEFAULT_VALUE = DefaultValue()
-
-
-def underload(func, default_attr="default"):
-    def wrapper(self, *args, **kwargs):
-        defaults = getattr(self, default_attr).model_dump()
-        new_values = {}
-
-        for key, _ in func.__annotations__.items():
-            new_values[key] = kwargs.get(key, defaults[key])
-
-        for value, (key, _) in zip(args, func.__annotations__.items()):
-            new_values[key] = value
-
-        return getattr(self, func.__name__ + "_")(**new_values)
-
-    return wrapper
-
-
-class Values(BaseModel):
+class LensDefaults(BaseModel):
     model_name: Optional[str] = None
     model_surname: Optional[str] = None
     seq_len: Optional[int] = None
@@ -72,74 +54,41 @@ class Values(BaseModel):
     batch_size: int = 62
     system_message: Optional[str] = "You are a helpful assistant."
 
+    @field_validator("system_message", mode="after")
     @classmethod
-    def from_preset(
-        cls,
-        model_surname: Literal[
-            "llama3.2_1b", "llama3.2_3b", "gemma2_2b", "qwen2.5_1.5b"
-        ],
-    ) -> "Values":
-        match model_surname:
-            case "llama3.2_1b":
-                return cls(
-                    model_name="meta-llama/Llama-3.2-1B-Instruct",
-                    model_surname=model_surname,
-                    chat_template="llama3.2.jinja2",
-                    restricted_tokens=["128000-128255", "non-ascii"],
-                    # idx between 128000 and 128255 (https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/blob/main/tokenizer_config.json)
-                )
-            case "llama3.2_3b":
-                return cls(
-                    model_name="meta-llama/Llama-3.2-3B-Instruct",
-                    model_surname=model_surname,
-                    chat_template="llama3.2.jinja2",
-                    restricted_tokens=["128000-128255", "non-ascii"],
-                    # idx between 128000 and 128255 (https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/blob/main/tokenizer_config.json)
-                )
-            case "gemma2_2b":
-                return cls(
-                    model_name="google/gemma-2-2b-it",
-                    model_surname=model_surname,
-                    padding=False,
-                    system_message=None,
-                    chat_template="gemma2_2b.jinja2",
-                    restricted_tokens=["0-108", "non-ascii"],
-                    # 108 first idx (https://huggingface.co/google/gemma-2-2b-it/blob/main/tokenizer_config.json)
-                )
-            case "qwen2.5_1.5b":
-                return cls(
-                    model_name="Qwen/Qwen2.5-1.5B-Instruct",
-                    model_surname=model_surname,
-                    chat_template="qwen2.5_1.5b.jinja2",
-                    restricted_tokens=["non-ascii"],
-                )
+    def str_none_to_none(cls, value: Optional[str]) -> Optional[str]:
+        if value == "none":
+            return None
+        return value
 
 
 class Lens:
     def __init__(
         self,
         model: tl.HookedTransformer,
-        default_values: Optional[Values] = None,
+        default_values: Optional[LensDefaults] = None,
     ):
         self.model = model
 
-        self.default_values = (
+        self.defaults = (
             default_values
             if default_values is not None
-            else Values(model_name=model.cfg.model_name)
+            else LensDefaults(model_name=model.cfg.model_name)
         )
-        self.model_name = cast(str, self.default_values.model_name)
+        self.model_name = cast(str, self.defaults.model_name)
 
         if self.model.tokenizer is None:
             raise ValueError("model.tokenizer is supposed not None")
         self.tokenizer = cast(Tokenizer, self.model.tokenizer)
 
     @classmethod
-    def from_preset(
-        cls,
-        surname: Literal["llama3.2_1b", "gemma2_2b", "llama3.2_3b", "qwen2.5_1.5b"],
-    ) -> tl.HookedTransformer:
-        default_values = Values.from_preset(surname)
+    def from_preset(cls, model_surname: str, **kwargs) -> "Lens":
+        with open(MODELS_PATH, "r") as f:
+            data = toml.load(f)
+
+        default_values = LensDefaults(
+            **(data.get(model_surname, {}) | kwargs | {"model_surname": model_surname})
+        )
 
         if default_values.centered:
             model = tl.HookedTransformer.from_pretrained(
@@ -170,7 +119,7 @@ class Lens:
 
         model.tokenizer.padding_side = default_values.padding_side
 
-        return model
+        return cls(model=model, default_values=default_values)
 
     # From https://github.com/andyrdt/refusal_direction, @arditi2024refusal, Apache-2.0 license
     @no_type_check
@@ -218,7 +167,6 @@ class Lens:
     def get_generations(
         self,
         prompts: List[str] | str,
-        batch_size: DefaultValue | int = DEFAULT_VALUE,
         padding: DefaultValue | bool = DEFAULT_VALUE,
         truncation: DefaultValue | bool = DEFAULT_VALUE,
         add_special_tokens: DefaultValue | bool = DEFAULT_VALUE,
@@ -226,10 +174,11 @@ class Lens:
         fwd_hooks: DefaultValue | HookList = DEFAULT_VALUE,
     ) -> List[str]: ...
 
+    @find_executable_batch_size(starting_batch_size=6)
     def get_generations_(
         self,
         prompts: List[str] | str,
-        generation_batch_size: int,
+        batch_size: int,
         padding: bool,
         truncation: bool,
         add_special_tokens: bool,
@@ -241,9 +190,9 @@ class Lens:
 
         generations = []
 
-        for i in tqdm(range(0, len(prompts), generation_batch_size)):
+        for i in tqdm(range(0, len(prompts), batch_size)):
             toks = self.tokenizer(
-                prompts[i : i + generation_batch_size],
+                prompts[i : i + batch_size],
                 padding=padding,
                 truncation=truncation,
                 add_special_tokens=add_special_tokens,
@@ -260,51 +209,42 @@ class Lens:
 
         return generations
 
-    @overload
-    def batch_scan_to_cpu(
-        self,
-        tokens: Int[t.Tensor, "batch_size seq_len"],
-        batch_size: int,
-        return_logits: Literal[False] = False,
-        scan_pattern: DefaultValue | Optional[str] = DEFAULT_VALUE,
-        layer: Optional[int] = None,
-    ) -> tl.ActivationCache: ...
-
-    @overload
-    def batch_scan_to_cpu(
-        self,
-        tokens: Int[t.Tensor, "batch_size seq_len"],
-        batch_size: int,
-        return_logits: Literal[True],
-        scan_pattern: DefaultValue | Optional[str] = DEFAULT_VALUE,
-        layer: Optional[int] = None,
-    ) -> Tuple[Float[t.Tensor, "batch seq d_vocab"], tl.ActivationCache]: ...
-
     @no_type_check
     @underload
-    def batch_scan_to_cpu(
+    def auto_scan(
         self,
-        tokens: Int[t.Tensor, "batch_size seq_len"],
-        batch_size: int,
-        return_logits: Literal[False] | Literal[True] = False,
+        inputs: str | List[str] | Int[t.Tensor, "batch_size seq_len"],
         scan_pattern: DefaultValue | Optional[str] = DEFAULT_VALUE,
+        padding: DefaultValue | bool = DEFAULT_VALUE,
+        truncation: DefaultValue | bool = DEFAULT_VALUE,
+        add_special_tokens: DefaultValue | bool = DEFAULT_VALUE,
         layer: Optional[int] = None,
-    ) -> (
-        tl.ActivationCache
-        | Tuple[Float[t.Tensor, "bach seq d_vocab"], tl.ActivationCache]
-    ): ...
+    ) -> Tuple[Float[t.Tensor, "bach seq d_vocab"], tl.ActivationCache]: ...
 
-    def batch_scan_to_cpu_(
+    @find_executable_batch_size
+    def auto_scan_(
         self,
-        tokens: Int[t.Tensor, "batch_size seq_len"],
+        inputs: str | List[str] | Int[t.Tensor, "batch_size seq_len"],
         batch_size: int,
-        return_logits: Literal[False] | Literal[True],
         scan_pattern: Optional[str],
+        padding: bool,
+        truncation: bool,
+        add_special_tokens: bool,
         layer: Optional[int],
-    ) -> (
-        tl.ActivationCache
-        | Tuple[Float[t.Tensor, "bach seq d_vocab"], tl.ActivationCache]
-    ):
+    ) -> Tuple[Float[t.Tensor, "bach seq d_vocab"], tl.ActivationCache]:
+        if isinstance(inputs, str | list):
+            if isinstance(inputs, str):
+                inputs = [inputs]
+            inputs = self.tokenizer(
+                inputs,
+                padding=padding,
+                truncation=truncation,
+                add_special_tokens=add_special_tokens,
+                return_tensors="pt",
+            ).input_ids
+
+        tokens = cast(t.Tensor, inputs)
+
         if layer is not None and layer < 0:
             layer += self.model.cfg.n_layers
 
@@ -327,8 +267,7 @@ class Lens:
                     tokens[i : i + batch_size],
                 )
 
-            if return_logits:
-                logits_list.append(logits.detach().cpu())  # type: ignore
+            logits_list.append(logits.detach().cpu())  # type: ignore
 
             cpu_cache = cache.to("cpu")
 
@@ -340,104 +279,7 @@ class Lens:
 
             logits, cache = release_memory(logits, cache)
 
-        if return_logits:
-            return t.cat(logits_list, dim=0), tl.ActivationCache(base_cache, self.model)
-
-        return tl.ActivationCache(base_cache, self.model)
-
-    @overload
-    def auto_scan(
-        self,
-        inputs: str | List[str] | Int[t.Tensor, "batch_size seq_len"],
-        return_logits: Literal[False] = False,
-        layer: Optional[int] = None,
-        starting_batch_size: Optional[int] = None,
-        scan_pattern: DefaultValue | Optional[str] = DEFAULT_VALUE,
-        padding: DefaultValue | bool = DEFAULT_VALUE,
-        truncation: DefaultValue | bool = DEFAULT_VALUE,
-        add_special_tokens: DefaultValue | bool = DEFAULT_VALUE,
-    ) -> tl.ActivationCache: ...
-
-    @overload
-    def auto_scan(
-        self,
-        inputs: str | List[str] | Int[t.Tensor, "batch_size seq_len"],
-        return_logits: Literal[True],
-        layer: Optional[int] = None,
-        starting_batch_size: Optional[int] = None,
-        scan_pattern: DefaultValue | Optional[str] = DEFAULT_VALUE,
-        padding: DefaultValue | bool = DEFAULT_VALUE,
-        truncation: DefaultValue | bool = DEFAULT_VALUE,
-        add_special_tokens: DefaultValue | bool = DEFAULT_VALUE,
-    ) -> Tuple[Float[t.Tensor, "batch seq d_vocab"], tl.ActivationCache]: ...
-
-    @no_type_check
-    @underload
-    def auto_scan(
-        self,
-        inputs: str | List[str] | Int[t.Tensor, "batch_size seq_len"],
-        return_logits: Literal[False] | Literal[True] = False,
-        layer: Optional[int] = None,
-        starting_batch_size: Optional[int] = None,
-        scan_pattern: DefaultValue | Optional[str] = DEFAULT_VALUE,
-        padding: DefaultValue | bool = DEFAULT_VALUE,
-        truncation: DefaultValue | bool = DEFAULT_VALUE,
-        add_special_tokens: DefaultValue | bool = DEFAULT_VALUE,
-    ) -> (
-        tl.ActivationCache
-        | Tuple[Float[t.Tensor, "batch seq d_vocab"], tl.ActivationCache]
-    ): ...
-
-    def auto_scan_(
-        self,
-        inputs: str | List[str] | Int[t.Tensor, "batch_size seq_len"],
-        return_logits: Literal[False] | Literal[True],
-        layer: Optional[int],
-        starting_batch_size: Optional[int],
-        scan_pattern: Optional[str],
-        padding: bool,
-        truncation: bool,
-        add_special_tokens: bool,
-    ) -> (
-        tl.ActivationCache
-        | Tuple[Float[t.Tensor, "batch seq d_vocab"], tl.ActivationCache]
-    ):
-        if isinstance(inputs, str | list):
-            if isinstance(inputs, str):
-                inputs = [inputs]
-            inputs = self.tokenizer(
-                inputs,
-                padding=padding,
-                truncation=truncation,
-                add_special_tokens=add_special_tokens,
-                return_tensors="pt",
-            ).input_ids
-
-        def auto_batch_scan_to_cpu(search_batch_size: int, reduced_inputs: t.Tensor):
-            return self.batch_scan_to_cpu(
-                reduced_inputs,
-                return_logits=return_logits,  # type: ignore
-                scan_pattern=scan_pattern,
-                layer=layer,
-                batch_size=search_batch_size,
-            )
-
-        if starting_batch_size is None:
-            starting_batch_size = len(inputs)
-
-        if return_logits:
-            return cast(
-                Tuple[Float[t.Tensor, "batch seq d_vocab"], tl.ActivationCache],
-                find_executable_batch_size(auto_batch_scan_to_cpu, starting_batch_size)(
-                    inputs
-                ),
-            )
-        return cast(
-            tl.ActivationCache,
-            find_executable_batch_size(auto_batch_scan_to_cpu, starting_batch_size)(
-                inputs
-            ),
-        )
+        return t.cat(logits_list, dim=0), tl.ActivationCache(base_cache, self.model)
 
     @overload
     def apply_chat_template(
@@ -625,8 +467,8 @@ class Lens:
         Float[t.Tensor, "n_layers batch_size d_model"],
         Float[t.Tensor, "n_layers batch_size d_model"],
     ]:
-        hf_scan = self.auto_scan(hf, scan_pattern=pattern)
-        hl_scan = self.auto_scan(hl, scan_pattern=pattern)
+        _, hf_scan = self.auto_scan(hf, scan_pattern=pattern)
+        _, hl_scan = self.auto_scan(hl, scan_pattern=pattern)
         stack_act_name_ = stack_act_name if stack_act_name is not None else pattern
 
         try:
@@ -657,7 +499,6 @@ class Lens:
         system_message: DefaultValue | Optional[str] = DEFAULT_VALUE,
         reduce_seq_method: DefaultValue
         | Literal["last", "mean", "max"] = DEFAULT_VALUE,
-        seq_len: DefaultValue | Optional[int] = DEFAULT_VALUE,
         pattern: DefaultValue | str = DEFAULT_VALUE,
         stack_act_name: DefaultValue | Optional[str] = DEFAULT_VALUE,
     ) -> Tuple[
@@ -673,7 +514,6 @@ class Lens:
         padding_side: Literal["left", "right"],
         system_message: Optional[str],
         reduce_seq_method: Literal["last", "mean", "max"],
-        seq_len: Optional[int],
         pattern: str,
         stack_act_name: Optional[str],
     ) -> Tuple[

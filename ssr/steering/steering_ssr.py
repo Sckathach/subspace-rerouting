@@ -8,8 +8,9 @@ from pydantic import PositiveInt
 
 from ssr import REFUSAL_DIRECTIONS_PATH
 from ssr.core import SSR, SSRConfig
+from ssr.defaults import DEFAULT_VALUE, DefaultValue
 from ssr.files import load_weights, save_metadata, save_weights
-from ssr.lens import DEFAULT_VALUE, DefaultValue, Lens
+from ssr.lens import Lens
 from ssr.types import HookList
 
 

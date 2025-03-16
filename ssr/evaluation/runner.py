@@ -8,8 +8,8 @@ from rich import print
 
 from ssr.evaluation.api import call_guard, call_lmstudio, call_ollama
 from ssr.evaluation.quick_eval import rcall_judge
+from ssr.evaluation.scoring import harmful_bow
 from ssr.evaluation.types import Attempt, JudgeScore, Response
-from ssr.evaluation.utils import harmful_bow
 from ssr.files import load_dataset, log_jsonl
 from ssr.lens import Lens
 from ssr.probes import ProbeSSR
@@ -53,21 +53,21 @@ class Runner:
             self.call_api = partial(
                 call_ollama,
                 model_name=self.ssr.config.model_name.replace("_", ":"),
-                system_message=self.lens.default_values.system_message,
+                system_message=self.lens.defaults.system_message,
                 verbose=self.run_config.verbose,
             )
         elif self.run_config.target_api == "lmstudio":
             self.call_api = partial(
                 call_lmstudio,
                 model_name=self.ssr.config.model_name,
-                system_message=self.lens.default_values.system_message,
+                system_message=self.lens.defaults.system_message,
                 verbose=self.run_config.verbose,
             )
 
     def reset_chat_template(self) -> None:
         self.chat_template_before, self.chat_template_after = (
             self.lens.apply_chat_template(
-                "[CROISSANT]", system_message=self.lens.default_values.system_message
+                "[CROISSANT]", system_message=self.lens.defaults.system_message
             ).split("[CROISSANT]")
         )
 
@@ -111,7 +111,7 @@ class Runner:
         self.ssr.init_prompt(
             self.lens.apply_chat_template(
                 self.run_config.mask.format(instruction=self.current_instruction),
-                system_message=self.lens.default_values.system_message,
+                system_message=self.lens.defaults.system_message,
             )
         )
         self.ssr.buffer_init_random()
@@ -172,7 +172,7 @@ class Runner:
                 Response(
                     model_name=self.ssr.config.model_name,
                     response=self.current_response,
-                    system_message=self.lens.default_values.system_message,
+                    system_message=self.lens.defaults.system_message,
                     bow=harmful_bow(self.current_response),
                     guard=self.current_guard,
                     judge=self.current_judge,
