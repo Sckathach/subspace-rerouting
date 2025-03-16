@@ -36,8 +36,7 @@ class LensDefaults(BaseModel):
     padding: bool = True
     padding_side: Literal["right", "left"] = "left"
     add_special_tokens: bool = False
-    pattern: str = "resid_post"
-    scan_pattern: Optional[str] = None
+    pattern: Optional[str] = "resid_post"
     stack_act_name: Optional[str] = None  # if None: same as pattern
     reduce_seq_method: Literal["last", "mean", "max"] = "last"
     dataset_name: Literal["mod", "adv", "mini", "bomb"] = "mod"
@@ -214,7 +213,7 @@ class Lens:
     def auto_scan(
         self,
         inputs: str | List[str] | Int[t.Tensor, "batch_size seq_len"],
-        scan_pattern: DefaultValue | Optional[str] = DEFAULT_VALUE,
+        pattern: DefaultValue | Optional[str] = DEFAULT_VALUE,
         padding: DefaultValue | bool = DEFAULT_VALUE,
         truncation: DefaultValue | bool = DEFAULT_VALUE,
         add_special_tokens: DefaultValue | bool = DEFAULT_VALUE,
@@ -226,11 +225,11 @@ class Lens:
         self,
         inputs: str | List[str] | Int[t.Tensor, "batch_size seq_len"],
         batch_size: int,
-        scan_pattern: Optional[str],
+        pattern: Optional[str],
         padding: bool,
         truncation: bool,
         add_special_tokens: bool,
-        layer: Optional[int],
+        layer: Optional[int] = None,
     ) -> Tuple[Float[t.Tensor, "bach seq d_vocab"], tl.ActivationCache]:
         if isinstance(inputs, str | list):
             if isinstance(inputs, str):
@@ -254,11 +253,11 @@ class Lens:
         logits_list = []
 
         for i in tqdm(range(0, total_samples, batch_size)):
-            if scan_pattern is not None:
+            if pattern is not None:
                 logits, cache = self.model.run_with_cache(
                     tokens[i : i + batch_size],
                     names_filter=lambda hook_name: tl.utils.get_act_name(
-                        cast(str, scan_pattern), layer=layer
+                        cast(str, pattern), layer=layer
                     )
                     in hook_name,
                 )
@@ -303,6 +302,8 @@ class Lens:
         **kwargs,
     ) -> BatchEncoding: ...
 
+    @no_type_check
+    @underload
     def apply_chat_template(
         self,
         messages: str | List[Dict[str, str]],
@@ -313,15 +314,13 @@ class Lens:
         **kwargs,
     ) -> str | BatchEncoding: ...
 
-    @no_type_check
-    @underload
     def apply_chat_template_(
         self,
         messages: str | List[Dict[str, str]],
-        tokenize: Literal[True] | Literal[False],
         system_message: Optional[str],
         role: str,
         add_generation_prompt: bool,
+        tokenize: Literal[True] | Literal[False] = False,
         **kwargs,
     ) -> str | BatchEncoding:
         # TODO manage return_tensor="pt"
@@ -467,8 +466,8 @@ class Lens:
         Float[t.Tensor, "n_layers batch_size d_model"],
         Float[t.Tensor, "n_layers batch_size d_model"],
     ]:
-        _, hf_scan = self.auto_scan(hf, scan_pattern=pattern)
-        _, hl_scan = self.auto_scan(hl, scan_pattern=pattern)
+        _, hf_scan = self.auto_scan(hf, pattern=pattern)
+        _, hl_scan = self.auto_scan(hl, pattern=pattern)
         stack_act_name_ = stack_act_name if stack_act_name is not None else pattern
 
         try:
