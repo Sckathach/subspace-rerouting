@@ -1,3 +1,4 @@
+import gc
 from pathlib import Path
 from typing import (
     Dict,
@@ -13,9 +14,6 @@ from typing import (
 import toml
 import torch as t
 import transformer_lens as tl
-from accelerate.utils.memory import (
-    release_memory,
-)
 from jaxtyping import Float, Int
 from pydantic import BaseModel, field_validator
 from tqdm import tqdm
@@ -150,14 +148,20 @@ class Lens:
                     dim=-1
                 )  # greedy sampling (temperature=0)
 
-                logits = release_memory(logits)
+                del logits
+                t.cuda.empty_cache()
+                gc.collect()
+
                 all_toks[:, -max_tokens_generated + i] = next_tokens
 
         result = self.model.tokenizer.batch_decode(  # type: ignore
             all_toks[:, toks.shape[1] :], skip_special_tokens=True
         )
 
-        toks, all_toks = release_memory(toks, all_toks)
+        del toks, all_toks
+        t.cuda.empty_cache()
+        gc.collect()
+
         return result
 
     # From https://github.com/andyrdt/refusal_direction, @arditi2024refusal, Apache-2.0 license
@@ -203,7 +207,11 @@ class Lens:
                 max_tokens_generated=max_tokens_generated,
                 fwd_hooks=fwd_hooks,
             )
-            toks = release_memory(toks)
+
+            del toks
+            t.cuda.empty_cache()
+            gc.collect()
+
             generations.extend(generation)
 
         return generations
@@ -276,7 +284,9 @@ class Lens:
                 for key in cpu_cache:
                     base_cache[key] = t.cat([base_cache[key], cpu_cache[key]], dim=0)
 
-            logits, cache = release_memory(logits, cache)
+            del logits, cache
+            t.cuda.empty_cache()
+            gc.collect()
 
         return t.cat(logits_list, dim=0), tl.ActivationCache(base_cache, self.model)
 
@@ -519,7 +529,11 @@ class Lens:
         Float[t.Tensor, "n_layers batch_size d_model"],
         Float[t.Tensor, "n_layers batch_size d_model"],
     ]:
-        hf_raw, hl_raw = load_dataset(dataset_name)
+        if max_samples is not None:
+            hf_raw, hl_raw = load_dataset(dataset_name, max_samples=max_samples)
+        else:
+            hf_raw, hl_raw = load_dataset(dataset_name)
+
         seq_len_ = self.get_max_seq_len(hf_raw, hl_raw)[0] if not padding else None
 
         hf, hl = self.process_dataset(

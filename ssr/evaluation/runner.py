@@ -18,6 +18,14 @@ from ssr.steering import SteeringSSR
 
 class RunnerConfig(BaseModel):
     log_filename: str
+    ssr_implementation: Literal[
+        "probe",
+        "steering",
+        "attention_dazzle",
+        "attention_dazzle_score",
+        "attention_ablation",
+        "attention_full_ablation",
+    ]
     instruction_dataset: Literal["mini", "adv", "mod", "bomb"] = "mini"
     mask: str = "{instruction} [MASK][MASK][MASK][MASK]"
     target_api: Literal["ollama", "lmstudio", "none"] = "lmstudio"
@@ -182,11 +190,12 @@ class Runner:
             self.run_config.log_filename,
             Attempt(
                 model_name=self.ssr.config.model_name,
-                original_instruction=cast(str, self.current_instruction),
-                adversarial_instruction=cast(str, self.current_candidate),
+                vanilla_input=cast(str, self.current_instruction),
+                adversarial_input=cast(str, self.current_candidate),
                 inital_loss=self.ssr.initial_loss,
                 final_loss=cast(float, self.current_loss),
                 duration=cast(int, self.current_duration),
+                ssr_implementation=self.run_config.ssr_implementation,
                 config=self.ssr.config,
                 responses=responses,
             ).model_dump(),

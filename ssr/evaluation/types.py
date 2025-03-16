@@ -57,17 +57,3 @@ class Attempt(BaseModel):
     config: ProbeSSRConfig | SteeringSSRConfig | AttentionSSRConfig
 
     responses: List[Response]
-
-
-class Attempt_v3(BaseModel):
-    model_name: str
-    instruction: str
-    suffix: str
-
-    inital_loss: float
-    final_loss: float
-    duration: int
-
-    config: ProbeSSRConfig | SteeringSSRConfig | AttentionSSRConfig
-
-    responses: List[Response]
