@@ -18,8 +18,8 @@ class SSRConfig(BaseModel):
     search_topk: int = 64
     buffer_size: int = 10
     replace_coefficient: float = 1.8
-    n_replace: Optional[int] = None
-    max_layer: int = -1
+    n_replace: Optional[int] = None  # Computed each time the loss decreases
+    max_layer: int = -1  # Accept negative indexing
     patience: int = 10
     early_stop_loss: float = 0.05
     max_iterations: int = 60
@@ -30,6 +30,7 @@ class SSR:
         self.model = model
         self.device = self.model.cfg.device
 
+        # TODO: add not_allowed_ids to SSR v4...
         self.not_allowed_ids = None
 
         if self.model.tokenizer is None:
@@ -40,6 +41,7 @@ class SSR:
         if self.config.max_layer < 0:
             self.config.max_layer += self.model.cfg.n_layers
 
+        # Compute once and store the tokens and embeds for the fixed input
         self.full_tokens: Int[t.Tensor, "seq_len"]
         self.full_embeds: Float[t.Tensor, "seq_len d_model"]
         self.mask_positions: Int[t.Tensor, "mask_len"]
@@ -56,6 +58,12 @@ class SSR:
         self.fwd_hooks: HookList
 
     def init_prompt(self, sentence: str, mask_str: str = "[MASK]") -> None:
+        """
+        Takes a masked sentence as input and initiate the properties: full_tokens, full_embeds, and mask_positions.
+
+        Example:
+            "How to create a [MASK] bomb? [MASK][MASK][MASK]"
+        """
         parts = re.split(f"({re.escape(mask_str)})", sentence)
 
         fixed_tokens = []
@@ -83,6 +91,9 @@ class SSR:
     def get_tokens(
         self, masked_tokens: Int[t.Tensor, "batch_size mask_len"]
     ) -> Int[t.Tensor, "batch_size seq_len"]:
+        """
+        Utility to get the full tokens
+        """
         full_tokens = (
             self.full_tokens.clone()
             .to(masked_tokens.device)
@@ -92,7 +103,10 @@ class SSR:
         full_tokens[:, self.mask_positions] = masked_tokens
         return full_tokens
 
-    def buffer_init_random(self):
+    def buffer_init_random(self) -> None:
+        """
+        Initiate the candidate buffer with random candidates. This function will call the loss_fn to also initiate the candidate losses.
+        """
         # TODO: filter ids
         candidate_ids = (
             t.randint(
@@ -128,7 +142,10 @@ class SSR:
         candidates_ids: Int[t.Tensor, "search_width adv_len"],
         losses: Float[t.Tensor, "search_width"],
         update_n_replace: bool = True,
-    ):
+    ) -> None:
+        """
+        Update the candidate buffer with new candidates. The buffer is sorted, and neighbour duplicates are skipped.
+        """
         best_loss_before = (
             self.candidate_losses[0].item() if len(self.candidate_losses) > 0 else 666.0
         )
@@ -161,7 +178,10 @@ class SSR:
         if update_n_replace:
             self.update_n_replace()
 
-    def buffer_jump(self):
+    def buffer_jump(self) -> None:
+        """
+        If the loss didn't decrease for config.patience steps, the *jump*-first candidates are discarded and stored in the archive buffer.
+        """
         jump_idx = t.multinomial(t.softmax(-self.candidate_losses, dim=-1), 1)
 
         print(
@@ -186,7 +206,12 @@ class SSR:
         self.candidate_ids = self.candidate_ids[jump_idx:]
         self.candidate_losses = self.candidate_losses[jump_idx:]
 
-    def update_n_replace(self):
+    def update_n_replace(self) -> None:
+        """
+        Each time the loss decreases, the n_replace is recomputed. The function is:
+
+        n_replace = (current_loss / initial_loss) ^ (1 / config.replace_coefficient)
+        """
         loss_ratio = min(
             1,
             max(0, self.candidate_losses[0].item() / (self.initial_loss + 1e-5)),
@@ -199,7 +224,10 @@ class SSR:
 
     def sample_ids_from_grad(
         self, ids: Int[t.Tensor, "mask_len"], grad: Float[t.Tensor, "mask_len"]
-    ):
+    ) -> Int[t.Tensor, "search_width mask_len"]:
+        """
+        Randomly pick new candidates given the gradient.
+        """
         original_ids = ids.repeat(self.config.search_width, 1)
 
         if self.not_allowed_ids is not None:
@@ -231,11 +259,19 @@ class SSR:
     def loss_fn(
         self, activations: Float[t.Tensor, "batch_size ..."]
     ) -> Float[t.Tensor, "batch_size"]:
+        """
+        The loss function has to be implemented in child classes. The only requirement is to return Float[t.Tensor, "batch_size"]. The batch_size value can be fetched from the activations argument.
+
+        See ssr/probes/probe_ssr.py for example.
+        """
         raise NotImplementedError
 
     def compute_gradients(
         self, adv_one_hot: Int[t.Tensor, "adv_len d_vocab"]
     ) -> Float[t.Tensor, "adv_len d_vocab"]:
+        """
+        Perform a forward pass with self.fwd_hooks until config.max_layer, and call the loss_fn function to get gradients.
+        """
         self.model.eval()
 
         adv_embed = adv_one_hot @ self.model.W_E
@@ -264,6 +300,9 @@ class SSR:
         search_batch_size: int,
         input_embeds: Float[t.Tensor, "search_width seq_len d_model"],
     ) -> Float[t.Tensor, "search_width"]:
+        """
+        Perform a forward pass with self.fwd_hooks until config.max_layer, and call the loss_fn function to get candidate losses.
+        """
         all_loss = []
 
         with self.model.hooks(self.fwd_hooks) as hooked_model:
@@ -286,6 +325,9 @@ class SSR:
         return t.cat(all_loss, dim=0)
 
     def generate(self) -> None:
+        """
+        Run at most max_iteration steps of optimization. This method updates the buffers and returns nothing.
+        """
         last_update = 0
         for i in tqdm.tqdm(range(self.config.max_iterations)):
             optim_ids = self.candidate_ids[0].clone()
@@ -335,6 +377,12 @@ class SSR:
 def get_restricted_tokens(
     tokenizer: Tokenizer, restricted_tokens_list: List[str | int]
 ) -> Int[t.Tensor, "n_restricted_tokens"]:
+    """
+    The restricted_token_list argument accepts:
+        - Individual tokens (int)
+        - Ranges (str), example: "0-66"
+        - The "non-ascii" keyword (str), to discard non-ascii tokens
+    """
     restricted_tokens = t.tensor(tokenizer.all_special_ids)
     for token in restricted_tokens_list:
         if isinstance(token, str):

@@ -27,27 +27,56 @@ from ssr.types import HookList, Tokenizer
 
 
 class LensDefaults(BaseModel):
+    # Name in Transformer Lens
     model_name: Optional[str] = None
+
+    # Surname when calling Lens.from_preset()
     model_surname: Optional[str] = None
+
+    # If padding=False, only keep the sentences that - when tokenized - have a length of seq_len token. Use the Lens.get_max_seq_len util to compute it automatically for a given dataset
     seq_len: Optional[int] = None
+
+    # Max number of samples when fetching/ scanning a dataset
     max_samples: Optional[int] = None
+
     padding: bool = True
     padding_side: Literal["right", "left"] = "left"
+
+    # We manage special tokens ourselves
     add_special_tokens: bool = False
+
+    # See Transfomer Lens
     pattern: Optional[str] = "resid_post"
-    stack_act_name: Optional[str] = None  # if None: same as pattern
+
+    # If None: same as pattern
+    stack_act_name: Optional[str] = None
+
     reduce_seq_method: Literal["last", "mean", "max"] = "last"
+
+    # D_instruction in the paper is "mod"
     dataset_name: Literal["mod", "adv", "mini", "bomb"] = "mod"
+
+    # Either a .jinja2 filepath, or directly as str
     chat_template: Optional[str] = None
+
+    # Don't choose candidates with special tokens like <eos> when optimizing with SSR
     restricted_tokens: Optional[List[str | int]] = None
+
+    # See Transformer Lens's center_unembed, center_writing_weights, and fold_ln
     centered: bool = False
+
     device: str = DEVICE
     max_tokens_generated: int = 64
+
+    # See Transformer Lens
     fwd_hooks: HookList = []
-    generation_batch_size: int = 4
+
     truncation: bool = False
     add_generation_prompt: bool = True
+
+    # Used in Lens.apply_chate_template()
     role: str = "user"
+
     batch_size: int = 62
     system_message: Optional[str] = "You are a helpful assistant."
 
@@ -59,6 +88,10 @@ class LensDefaults(BaseModel):
         return value
 
 
+# See reproduce_experiments/using_lens.ipynb to have a glimpse of
+# - How preset can be loaded
+# - How the default values are managed
+# - How utilities work
 class Lens:
     def __init__(
         self,
@@ -80,6 +113,13 @@ class Lens:
 
     @classmethod
     def from_preset(cls, model_surname: str, **kwargs) -> "Lens":
+        """
+        Load a preset from the models.toml file. Currently available presets:
+            from_preset("llama3.2_1b")
+            from_preset("llama3.2_3b")
+            from_preset("gemma2_2b")
+            from_preset("qwen2.5_1.5b")
+        """
         with open(MODELS_PATH, "r") as f:
             data = toml.load(f)
 
@@ -239,6 +279,9 @@ class Lens:
         add_special_tokens: bool,
         layer: Optional[int] = None,
     ) -> Tuple[Float[t.Tensor, "bach seq d_vocab"], tl.ActivationCache]:
+        """
+        Same as Transformer Lens' model.run_with_cache, but with batch to CPU and GPU protection
+        """
         if isinstance(inputs, str | list):
             if isinstance(inputs, str):
                 inputs = [inputs]
@@ -265,7 +308,7 @@ class Lens:
                 logits, cache = self.model.run_with_cache(
                     tokens[i : i + batch_size],
                     names_filter=lambda hook_name: tl.utils.get_act_name(
-                        cast(str, pattern), layer=layer
+                        pattern, layer=layer
                     )
                     in hook_name,
                 )
@@ -382,6 +425,16 @@ class Lens:
     ) -> Tuple[
         Int[t.Tensor, "batch_size seq_len"], Int[t.Tensor, "batch_size seq_len"]
     ]:
+        """
+        This routine will:
+            - Apply the chat template
+            - If padding = True
+                - Tokenize with padding
+            - If padding = False
+                - Tokenize one by one
+                - Pick the tokenized sentences that have a length of seq_len
+                - Concatenate into one tensor
+        """
         max_samples_ = (
             max_samples if max_samples is not None else max(len(hf_raw), len(hl_raw))
         )
@@ -476,6 +529,9 @@ class Lens:
         Float[t.Tensor, "n_layers batch_size d_model"],
         Float[t.Tensor, "n_layers batch_size d_model"],
     ]:
+        """
+        This routine will take tokenized inputs, scan and apply the reduce method
+        """
         _, hf_scan = self.auto_scan(hf, pattern=pattern)
         _, hl_scan = self.auto_scan(hl, pattern=pattern)
         stack_act_name_ = stack_act_name if stack_act_name is not None else pattern
@@ -529,6 +585,12 @@ class Lens:
         Float[t.Tensor, "n_layers batch_size d_model"],
         Float[t.Tensor, "n_layers batch_size d_model"],
     ]:
+        """
+        This routine will:
+            - Load the dataset
+            - Compute the seq_len needed if padding = False
+            - Call process_dataset and scan_dataset
+        """
         if max_samples is not None:
             hf_raw, hl_raw = load_dataset(dataset_name, max_samples=max_samples)
         else:
