@@ -5,6 +5,7 @@
 
 </div>
 
+> [!NOTE]
 > **Major SSR v4 update!** (17 Mar 25) 
 > - ~~Perturbation in suffix~~ &rarr; perturbation anywhere
 > - The core algorithm (`ssr/core.py`) does not depend on `Lens` anymore (enhanced reproducibility) 
@@ -22,7 +23,7 @@ This repository contains:
 
 
 ## Installation
-> [!NOTE]
+> [!IMPORTANT]
 > The project needs **Python 3.12** 
 
 1. **Install the environment**
