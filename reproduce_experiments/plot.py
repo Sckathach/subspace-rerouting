@@ -1,4 +1,5 @@
 # type: ignore
+# Borrowed from https://github.com/callummcdougall/ARENA_3.0/blob/main/chapter1_transformer_interp/exercises/plotly_utils.py
 import numpy as np
 import plotly.express as px
 import torch as t

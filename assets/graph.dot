@@ -1,0 +1,71 @@
+digraph SystemDiagram {
+    fontname="JetBrains Mono";
+    label="Dependency graph";
+    layout="dot";
+    rankdir="BT";
+    compound=true;
+    node [style=filled; fillcolor=transparent; color=transparent; fontname="JetBrains Mono"; width=1.5];
+    edge [minlen=3];
+    ordering=in
+
+      
+    subgraph cluster_main {
+        label="SSR";
+        style="bold";
+        color="#FFB84C";
+        core [label="core.py"]; 
+    }
+
+    
+    subgraph cluster_impl {
+        label="Implementations"
+        color="lightgrey";
+
+        subgraph cluster_probe {
+            label="Probe SSR";
+            style="bold";
+            color="#A459D1"
+            ssr_probes [label="probes/"];
+        }
+        
+        subgraph cluster_steering {
+            label="Steering SSR";
+            style="bold";
+            color="#A459D1"
+            ssr_steering [label="steering/"];
+        }
+        
+        subgraph cluster_attention {
+            label="Attention SSR";
+            style="bold";
+            color="#A459D1"
+            ssr_attention [label="attention/"];
+        }
+    }
+
+    subgraph cluster_utils {
+            label="Utils";
+            color="lightgrey";
+            defaults [label="defaults.py"];
+            memory [label="memory.py"];
+            files [label="files.py"];
+            lens [label="lens.py"];
+        }
+    
+    subgraph cluster_eval {
+        label="Evaluation";
+        color="lightgrey";
+        runner [label="evaluation/"];
+    }
+
+    tl [label="Transformer Lens", color="#2CD3E1"; shape=ellipse; width=2.75];
+
+    core -> tl [ltail=cluster_main ]; 
+    lens -> tl [ltail=cluster_utils];
+
+    ssr_probes -> core [lhead=cluster_main; ltail=cluster_impl ];
+    ssr_steering -> memory [lhead=cluster_utils; ltail=cluster_impl ];
+
+    runner -> files [lhead=cluster_utils; ltail=cluster_eval];
+    runner -> ssr_attention [lhead=cluster_impl; ltail=cluster_eval];
+}

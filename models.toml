@@ -1,45 +1,24 @@
+
 ["llama3.2_1b"]
-chat_template     = "llama3.2.jinja2"
-lm_studio         = "llama-3.2-1b-instruct"
-model_name        = "meta-llama/Llama-3.2-1B-Instruct"
-other_names       = [ "Llama-3.2-1B-Instruct" ]
-restricted_tokens = [ "128000-128255" ]
+    chat_template="llama3.2.jinja2"
+    model_name="meta-llama/Llama-3.2-1B-Instruct"
+    restricted_tokens=["128000-128255", "non-ascii"]
 # idx between 128000 and 128255 (https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/blob/main/tokenizer_config.json)
-
 ["llama3.2_3b"]
-chat_template     = "llama3.2.jinja2"
-lm_studio         = "llama-3.2-3b-instruct"
-model_name        = "meta-llama/Llama-3.2-3B-Instruct"
-other_names       = [ "Llama-3.2-3B-Instruct" ]
-restricted_tokens = [ "128000-128255" ]
+    chat_template="llama3.2.jinja2"
+    model_name="meta-llama/Llama-3.2-3B-Instruct"
+    restricted_tokens=["128000-128255", "non-ascii"]
 # idx between 128000 and 128255 (https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/blob/main/tokenizer_config.json)
-
-[gemma2_2b]
-chat_template     = "gemma2_2b.jinja2"
-lm_studio         = "gemma-2-2b-it"
-model_name        = "google/gemma-2-2b-it"
-other_names       = [ "gemma-2-2b-it" ]
-restricted_tokens = [ "0-108" ]
-# 108 first idx (https://huggingface.co/google/gemma-2-2b-it/blob/main/tokenizer_config.json)
-
-["qwen1_1.8b"]
-chat_template = "<|im_start|>user\n{{ messages[-1]['content'] }}<|im_end|>\n<|im_start|>assistant\n"
-model_name    = "Qwen/Qwen-1_8B-chat"
-pad_token     = "<|extra_0|>"
-padding_side  = "left"
-
-["qwen1.5_1.8b"]
-model_name = "Qwen/Qwen1.5-1.8B-Chat"
-
-["qwen2_1.5b"]
-model_name = "Qwen/Qwen2-1.5B-Instruct"
+["gemma2_2b"]
+    chat_template="gemma2_2b.jinja2"
+    model_name="google/gemma-2-2b-it"
+    padding=false
+    restricted_tokens=["0-108", "non-ascii"]
+    system_message="none"
+    # 108 first idx (https://huggingface.co/google/gemma-2-2b-it/blob/main/tokenizer_config.json)
 
 ["qwen2.5_1.5b"]
-chat_template = "qwen2.5_1.5b.jinja2"
-lm_studio     = "qwen2.5-1.5b-instruct"
-model_name    = "Qwen/Qwen2.5-1.5B-Instruct"
-other_names   = [ "Qwen2.5-1.5B-Instruct" ]
 
-[guard]
-model_name = "meta-llama/Llama-Guard-3-1B"
-ollama     = "llama-guard3:1b"
+    chat_template="qwen2.5_1.5b.jinja2"
+    model_name="Qwen/Qwen2.5-1.5B-Instruct"
+    restricted_tokens=["non-ascii"]

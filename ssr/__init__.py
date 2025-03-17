@@ -20,8 +20,14 @@ DATASETS_PATH = os.getenv(
 MODELS_PATH = os.getenv(
     "MODELS_PATH", Path(PROJECT_PATH / ".." / "models.toml").resolve()
 )
+PROBES_WEIGTHS_PATH = os.getenv(
+    "PROBES_WEIGHTS", Path(PROJECT_PATH / "probes" / "weights").resolve()
+)
 PROBES_CONFIG_PATH = os.getenv(
-    "PROBES_CONFIG_PATH", Path(PROJECT_PATH / ".." / "probes_config.json").resolve()
+    "PROBES_CONFIG_PATH", Path(PROJECT_PATH / "probes" / "probes_config.json").resolve()
+)
+REFUSAL_DIRECTIONS_PATH = os.getenv(
+    "REFUSAL_DIRECTIONS_PATH", Path(PROJECT_PATH / "steering" / "weights").resolve()
 )
 TEMPLATES_PATH = os.getenv("TEMPLATES_PATH", Path(PROJECT_PATH / "templates").resolve())
 
