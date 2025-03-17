@@ -14,7 +14,6 @@ from ssr.evaluation.scoring import (
 )
 from ssr.evaluation.types import (
     Attempt,
-    Attempt_v3,
     CallParameters,
     JudgeScore,
     Response,
@@ -28,7 +27,6 @@ __all__ = [
     "CallParameters",
     "Response",
     "Attempt",
-    "Attempt_v3",
     "Runner",
     "RunnerConfig",
     "rcall_judge",

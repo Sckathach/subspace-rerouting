@@ -165,9 +165,9 @@ class SSR:
         jump_idx = t.multinomial(t.softmax(-self.candidate_losses, dim=-1), 1)
 
         print(
-            f"[b][red]Patience max reached, jumping from {self.candidate_ids[0]} with"
-            f"{self.candidate_losses[0]} to {self.candidate_ids[jump_idx]} with"
-            f"{self.candidate_losses[jump_idx]} ({jump_idx.item()} jump)[/][/]"
+            f"[b][red]Patience max reached, jumping from {self.candidate_ids[0]} with "
+            f"{self.candidate_losses[0].item()} to {self.candidate_ids[jump_idx]} with "
+            f"{self.candidate_losses[jump_idx].item()} ({jump_idx.item()} jumps)[/][/]"
         )
         self.archive_ids = t.cat(
             [
