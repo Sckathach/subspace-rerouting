@@ -1,16 +1,16 @@
 [project]
-    authors=[{name="Sckathach", email="thomas.winninger68@gmail.com"}]
+    authors=[{name="Thomas Winninger", email="thomas.winninger@telecom-sudparis.eu"}]
     dependencies=[
         "python-dotenv (>=1.0.1,<2.0.0)",
         "scikit-learn (>=1.6.1,<2.0.0)",
         "toml (>=0.10.2,<0.11.0)",
         "transformer-lens (>=2.15.0,<3.0.0)",
     ]
-    description=""
+    description="Repository of the paper Using Mechanistic Interpretability to Craft Adversarial Attacks against Large Language Models"
     name="subspace-rerouting"
     readme="README.md"
     requires-python=">=3.12,<3.13"
-    version="0.1.0"
+    version="0.4.0"
 
 [build-system]
     build-backend="poetry.core.masonry.api"
