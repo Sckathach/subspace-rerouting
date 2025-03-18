@@ -3,6 +3,8 @@
 # Subspace Rerouting
 <div><img src="assets/ssr_schema_screenshot.png" width="730" alt="Warp" /></div>
 
+<div><b><a href="https://arxiv.org/abs/2503.06269">Paper</a> - <a href="/paper/main.pdf">Paper (Up-to-date version) - <a href="https://sckathach.github.io/mech-interp/subspace-rerouting/">Website</a></b></div>
+
 </div>
 
 > [!NOTE]
@@ -12,9 +14,8 @@
 > - Probes and refusal directions can be stored and loaded 
 > - *Fixes and refactoring*
 
-This is the repository for [Using Mechanistic Interpretability to Craft Adversarial Attacks against Large Language Models](https://arxiv.org/abs/2503.06269). 
+This is the repository for *Using Mechanistic Interpretability to Craft Adversarial Attacks against Large Language Models*, it contains:
 
-This repository contains: 
 - The core SSR algorithm 
 - The three implementations: Probe SSR, Steering SSR, and Attention SSR 
 - Notebooks to reproduce the experiments of the paper 
