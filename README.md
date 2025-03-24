@@ -3,7 +3,7 @@
 # Subspace Rerouting
 <div><img src="assets/ssr_schema_screenshot.png" width="730" alt="Warp" /></div>
 
-<div><b><a href="https://arxiv.org/abs/2503.06269">Paper</a> - <a href="/paper/main.pdf">Paper (Up-to-date version)</a> - <a href="https://sckathach.github.io/mech-interp/subspace-rerouting/">Website</a></b></div>
+<div><b><a href="https://arxiv.org/abs/2503.06269">Paper</a> - <a href="/paper/main.pdf">Paper (Up-to-date version)</a> - <a href="https://sckathach.github.io/mech-interp/subspace-rerouting/">Website</a> - <a href="https://www.lesswrong.com/posts/mG7jioaAsBasnuD4b/subspace-rerouting-using-mechanistic-interpretability-to-2">Less Wrong post</a></b></div>
 
 </div>
 
