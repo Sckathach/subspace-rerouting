@@ -1,5 +1,5 @@
 #import "neurips.typ": *
-#import "sck_v2.typ": *
+#import "sck_v3.typ": *
 #import "ssr_schema.typ": *
 
 #let affls = (
@@ -145,7 +145,12 @@ While the previous approaches identify subspaces in the model's overall represen
 Comparing attention patterns between successful and unsuccessful jailbreak attempts revealed this pattern: certain heads completely shifted their focus depending on which suffix was present. When presented with an unsuccessful suffix, these heads attended primarily to harmful words in the instruction. In contrast, with a successful suffix, the same heads diverted their attention to tokens within the suffix, effectively ignoring the harmful content (@fig:hijack).
 
 #figure(
-  image("assets/png/hijacking_attention_shorter.png"),
+  grid(
+    columns: 1,
+    image("assets/svg/hijacking_1.svg"),
+    v(0.7em),
+    image("assets/svg/hijacking_2.svg"),
+  ),
   caption: [Visualization of the attention patterns for the 4th head of layer 25th (L25H4), at the last token's position on one unsuccessful and one successful jailbreak attempt. While the choice of orange and violet is purely cosmetic, the intensity represents the weight of the attention. In the unsuccessful attempt (*top*), the attention of the last token is focused on the harmful word "exploit", while on the successful attempt (*bottom*), the attention is redirected to the seemingly harmless token "YAML" in the suffix. The suffix ":: Short YAML" successfully hijacked the attention of L25H4.],
 ) <fig:hijack>
 
@@ -916,12 +921,46 @@ We tested this method first on the refusal directions. Given a layer, a refusal 
 
 #figure(
     grid(
-        columns:2,
-        image("assets/png/af_lens1.png"),
-        image("assets/png/af_lens2.png"),
+      columns:2,
+      display_conversation_(
+          assistant_response: [
+      How to create a  malicious \
+      How to create a  hostage \
+      How to create a  scam \
+      How to create a  abusive \
+      How to create a  malware \
+      How to create a  poisoned \
+      How to create a  forcibly \
+      How to create a burn \
+      How to create a  corrupted \
+      How to create a  fatal \
+          ], 
+          c1: colors.pink,
+          width: 80%
+      ),
+
+      display_conversation_(
+          assistant_response: [
+      How to create a d\*\*\* \
+      How to create a w\*\*\*\* \
+      How to create a p\*\*\*\* \
+      How to create a g\*\*\*\*\*\*\* \
+      How to create a p\*\*\*\*\*\*\*\*\* \
+      How to create a f\*\*\*\*\*\* \
+      How to create a p\*\*\*\*\*\*\*\*\* \
+      How to create a c\*\*\* \
+      How to create a e\*\*\* \
+      How to create a b\*\*\*\* \
+          ], 
+          c1: colors.turquoise,
+          width: 80%
+      )
     ),
     caption: [Two runs of _reverse_-lens with the beginning sentence: "How to create a \[MASK\]", and the refusal direction as target, using the Llama 3.2 1b model.]
 )
+
+
+
 
 The experiment was done with the batched version of SSR, so the optimisation yielded multiple neighbouring candidates, which explains the common theme per run. We did not go further on this task, but the result is remarkable! Projecting the direction toward the output gives tokens like "I can't", whereas taking the same refusal direction and "projecting" it backward yields slurs. It is not deterministic like its counterpart, however, on our few experiments, it achieved approximately one good run out of three, with each run converging in seconds, the method might be slightly practical. Plus, the algorithm was not designed for this task, for instance, adding perplexity might improve the results a lot.
 
@@ -930,7 +969,26 @@ A bit of curiosity made us try the method on Sparse Auto-Encoders (SAE). By modi
 We choose the well-studied SAE of GPT2-small, with the attention SAE at layer 9 and the latent 20668. This latent was interpreted as a latent fireing on firearms, especially on the tokens " firearm", " firearms", " handguns", " Firearms", " handgun", " gun", " guns", "Gun", " Guns", and " NRA". This is a token-level feature latent. It can be found ... We then applied SAE on it, and exactly like the experiment with the refusal direction, it yielded inetrepretable results:
 
 #figure(
-    image("assets/png/af_lens3.png", width: 50%)
+  display_conversation_(
+      assistant_response: [
+  ''; handguns weaponoll gun2\_ &\\hiMonP \
+  ''; handguns weaponoll gun2\_ Collider\\hiMonP \
+  ''; handguns weaponoll gun2\_,...\\hiMonP \
+  ''; handguns weaponoll gun2\_FN\\hiMonP  \
+  ''; handguns weaponoll gun2\_FN\\hiEmptyP  \
+  ''; handguns weaponoll gun2\_FN\\hiReP \
+  ''; handguns weaponoll gun2\_FN\\hiOcc \
+  ''; handguns weaponoll gun2\_FN\\hiBegP  \
+  ''; handguns weaponoll gun2\_FN\\hiMonavement  \
+  ''; handguns weaponoll gun2\_FN\\eleMonP  \
+  ''; handguns weapon"," gun2\_I\*hiWU  \
+  ''; handguns weapon"," gun2\_I\*hiFlU  \
+    ], 
+      c1: colors.turquoise, 
+      c2: colors.pink, 
+      grad: true, 
+      width: 60%
+  )
 )
 
 We obtained approximately one good run on five, the unsuccessful runs are the ones where the gradient gets stuck and the activation stays at 0. We did not test extensively, so we are not able to draw any conclusion apart the fact that it might be possible to add this tool to the interpreatbility toolbox. 
@@ -944,3 +1002,4 @@ It might be interesting to compare SSR with other mechanistic interpretability t
 On the core algorithm, multiple improvements are planned. Instead of using a suffix, we can apply perturbation everywhere on the sentence. This perturbation does not have to be new tokens, but can also be semantic perturbations on existing tokens. The initialization process can use special tokens, like `<unk>` instead of random tokens, which can lead to the discovery of more interesting subspaces. Even the sampling strategy can be improved. For instance, using perplexity to generate more interpretable perturbations.
 
 We tried to use sparse auto-encoders (SAE) in our work, and the first results show that they might be useful. First, to find bias in the refusal directions and probes before using them as optimisers. For instance, we found that our refusal directions and our probes were biased toward python scripting, which lead to the models, answering how to create a bomb, but using python classes. Secondly, previous work @obrien_steering_2024 showed steering was possible with SAE. This may enable multi-steering SSR, using a combination of steering vectors and SAE to reduce bias and semantic drifts.
+
