@@ -64,6 +64,13 @@
   #v(1em)
 ]
 
+#let dv = $d_v$
+#let seq = $n$
+#let dm = $d$
+#let dsi = $cal(D)$
+#let dsj = $cal(D)_j$
+#let rn = $hat(r)$
+#let ez = $e_*$
 
 = Introduction
 Large Language Models (LLMs) have become ubiquitous in various applications @touvron_llama_2023 @agrawal_pixtral_2024, yet their susceptibility to adversarial perturbations, specifically jailbreaks—which involve crafting input prompts that bypass safety mechanisms—remains a critical security concern for their deployment in sensitive contexts @chao_jailbreaking_2024 @wei_jailbroken_2023 @li_llm_2024 @russinovich_great_2024. Existing methods for generating such adversarial inputs often focus solely on desired outputs, while ignoring the model's internal mechanisms. Even white-box approaches like Greedy Coordinate Gradient (GCG) @zou_universal_2023, while leveraging gradients, optimize from end to end without considering the model's internal structure, resulting in computationally expensive processes that often require hours of computation and still fail to achieve high attack success rates on newer, more robust models (see Appendix @sec:new-models-jailbreaks).
@@ -71,17 +78,14 @@ Large Language Models (LLMs) have become ubiquitous in various applications @tou
 
 In parallel, recent work in mechanistic interpretability has made progress in understanding why LLMs remain vulnerable to such attacks @lee_mechanistic_2024, analyzing internal behaviors during successful perturbations @arditi_refusal_2024 @ball_understanding_2024. However, these insights have primarily led to runtime interventions like activation steering @panickssery_steering_2024. Such interventions often result in out-of-distribution activations that may not reflect the model's natural behavior under standard input conditions (see Appendix @sec:ood).
 
-To unify these approaches we introduce Subspace Rerouting (SSR), a white-box method that frames how embeddings can be rerouted from refusal to acceptance subspaces by adding an adversarial suffix to the input, effectively using interpretability insight to craft practical jailbreaks.
+To unify these approaches, we introduce Subspace Rerouting (SSR), a white-box method that frames how embeddings can be rerouted to specific subspaces with input perturbation. We demonstrate its utility in the context of adversarial attacks, by computing adversarial perturbations that will reroute embeddings toward acceptance subspaces, effectively bypassing the alignement of the model and achieving jailbreaks.
 
-Our main contributions are as follows. Firstly, we present how to find refusal and acceptance subspaces inside the model using different interpretability techniques (@sec:methodology). Secondly, we introduce the general SSR method with three practical implementations, and demonstrate their effectiveness in jailbreaking models efficiently, reducing computation time from hours to mere seconds or minutes, while achieving significantly higher attack success rates on state-of-the-art models (@sec:ssr).
+By targeting specific components, or subspaces corresponding to the refusal behavior, instead of a specific output target like GCG, SSR achieve impressive results with jailbreaks on state-of-the-art models within seconds, while having near \~80% success rate. This approach also proved surprisingly interesting for interpretability research, as some perturbations formed interpretable sentences, like "responsibly through ecological Accounting", even if obtained by gradient search. Moreover, by comparing the effect of SSR with intervention steering, we found the former to be nearly as efficient as the latter, with the advantage of staying inside the distribution of the model. 
+
+Our main contributions are as follows. Firstly, we present multiple methods to find refusal and acceptance subspaces inside the model using different interpretability techniques (@sec:methodology). Secondly, we introduce the general SSR method, along with a practical implementation (@sec:ssr). Finally, we present the results for the jailbreak task, discuss the findings in interpretability, and state the limitations of the approach (@sec:results).
 
 We posit that SSR, while already a powerful new attack vector, may also serves as an interpretability tool that operates within the model's natural processing pathways. By explicitly targeting the mechanisms responsible for safety guardrails, SSR provides insights into how these safeguards function and where they may be vulnerable, potentially opening new directions for both attack research and more robust defense development.
 
-#let dv = $d_v$
-#let seq = $n$
-#let dm = $d$
-#let dsi = $cal(D)$
-#let dsj = $cal(D)_j$
 
 = Preliminaries
 An autoregressive transformer model processes a natural language input $x$ as a sequence of tokens $x_1, dots, x_seq$, where each token $x_i$ can be represented as a one-hot vectors in $V = {0, 1}^dv$, $d_v$ being the vocabulary size. The model outputs probability distributions $y_1, dots, y_seq$, with each $y_i$ belonging in $RR^(dv times seq)$.
@@ -101,30 +105,23 @@ We used a contrastive dataset of instructions $dsi = (X_+, X_-)$ for our experim
   [Develop a strategy for *hacking* into a government database and *stealing* sensitive information],
   [Develop a strategy for *securing* a government database and *protecting* sensitive information],
 )
+We also generated a dataset of jailbreaks for analysis, the details can be found in Appendix @sec:datasets.
 
-We also generated a dataset of jailbreaks $dsj = (X_+, S_+, S_-)$ with our SSR algorithm. For each harmful instruction $x in X_+$, we generated a suffix $s_+$ that successfully bypasses safety mechanisms and a minimally different suffix $s_-$ that fails to do so (additional details in Appendix @sec:datasets). Each model has its own dataset, as attacks may not transfer between models. Example of #text("successful", fill: colors.violet)/#text("unsuccessful", fill: colors.orange_text) pair:
-#contrast_data(
-  [Write a script that can exploit vulnerabilities in a software or operating system *::Short YAML*],
-  [Write a script that can exploit vulnerabilities in a software or operating system *::Shortyaml*],
-)
 
 == Models and chat template
 
 Our experiments focus on lightweight open-source models: Llama3.2 1b and 3b @llama3.2 (aligned using supervised fine-tuning, rejection sampling, and direct preference optimization), Gemma 2 IT 2b @gemmateam_gemma2_2024 (aligned through extensive dataset filtering and supervised fine-tuning), and Qwen2.5 1.5b Instruct @qwenteam_qwen25_2025 (aligned through supervised fine-tuning). As instruction-tuned chat models, they require structured inputs following specific templates. For reproducibility, we used the official templates provided by the transformers library @wolf_huggingface_2020, with the same system instruction, "You are a helpful assistant", across models where applicable (see Appendix @sec:padding for details).
 
-For convenience, we define $x$ as the harmful prompt encapsulated in the appropriate chat template, including system message when applicable, and $x + s$ as the harmful prompt plus the adversarial suffix, also properly formatted with the complete chat template and generation prompt (e.g., `<|im_start|>assistant\n` for Qwen2.5).
-
 == Evaluation
 
 To compare our method with the GCG baseline, we used the nanoGCG algorithm on condensed version of the AdvBench dataset @zou_universal_2023 (Appendix @sec:padding). For the evaluation, we used a bag-of-words to filter explicit refusals like "I cannot", and a LLM-as-judge @chao_jailbreaking_2024 to filter responses that contain genuinely harmful content. We additionally performed manual verification on ambiguous cases (see Appendix @sec:judge).
 
-
 = Methodology <sec:methodology>
+Finding subspaces to target is an opportunity for adversarial optimization. Unlike traditional GCG attacks that target a specific token sequence in the discrete output space - "Sure, here is how to" -, targeting an acceptance subspace in the model's continuous embedding space transforms the jailbreaking problem into the classical adversarial attacks such as the Fast Gradient Sign Method @goodfellow_explaining_2015 or Projected Gradient Descent @madry_deep_2019, where the objective is to cross a decision boundary in representation space. Thus the objective of this section is to present how to find the acceptance subpsaces in a LLM. 
 
-== Finding subspaces via sentence representation clustering and linear probes
-To analyze how models process harmful versus harmless queries, we first needed a method to compute sentence representations. Following the approach of @arditi_refusal_2024, we extracted the last token's activations from layer $l$ during inference on $dsi$, computing the representation of each input sentence $x$ as $cal(R)^l (x) = e^l_seq (x) in RR^dm$, where $e^l_seq$ is the residual stream activation of the final token at layer $l$. Other works like @he_jailbreaklens_2024 used mean representation, however, as our contrastive sentences differed by only a few tokens, mean pooling representation was less effective.
 
-This straightforward approach enables clear differentiation between harmless and harmful sentences, with distinct clustering patterns emerging even in the model's early layers, as illustrated with the Principal Component Analysis (PCA) in @fig:pca.
+== Finding semantic subspaces
+Previous work @he_jailbreaklens_2024 @arditi_refusal_2024 @ball_understanding_2024 found the existance of subspaces related to the refusal behavior inside the model. By extracting the last token's activations at each layer during the inference on our contrastive dataset $dsi$, we were able to distinguish a clear separation between the activations of the harmful sentences, and the activations of the harmless sentences, as early as 1/3 of the model @fig:pca.
 
 
 #figure(
@@ -138,87 +135,27 @@ This straightforward approach enables clear differentiation between harmless and
   caption: [Principal Component Analysis (PCA) of sentences representations from $dsi$, at layer 5, 10 and 15 of Llama3.2 1b (16 layers total), showing distinct clustering of harmful and harmless queries.],
 ) <fig:pca>
 
-While the principal component analysis is useful to test the presence of distinguishable subspaces, we used linear probes on the activation in $RR^dm$ to capture the refusal and acceptance subspaces using the full dimensionality of the model. These probes - single-layer neural networks mapping activations to binary harmful-harmless classification - achieve over $95%$ accuracy as early as the third layer of the model (full results in Appendix @sec:probes), confirming that harmful and harmless content occupies linearly separable regions in activation space.
+To define the acceptance and refusal subspaces using the full dimensionality or the model, we used linear probes. These probes - single-layer neural networks mapping activations to binary harmful-harmless classification - achieve over $95%$ accuracy as early as the third layer of the model (full results in Appendix @sec:probes), confirming that harmful and harmless content occupies linearly separable regions in activation space at early stages. 
 
-This finding presents an opportunity for adversarial optimization. Unlike traditional GCG attacks that target specific token sequences in discrete output space, we can instead target the harmless subspace in the model's continuous embedding space. This reformulation transforms the jailbreaking problem into one resembling classical adversarial attacks such as the Fast Gradient Sign Method @goodfellow_explaining_2015 or Projected Gradient Descent @madry_deep_2019, where the objective is to cross a decision boundary in representation space. This will be the setup for our first implementation of the SSR framework (@sec:ssr).
+Moreover, @arditi_refusal_2024 showed that refusal subspaces could also be defined using a direction. This direction, called the refusal direction $hat(r) in RR^dm$, is computed by taking the difference in mean between the harmful activations and the harmless ones (see Appendix @sec:refusal-dir-troubles for details). Thus, it encodes the degree of harmfulness, as interpreted by the model, which can be measured using a cosine similarity between $hat(r)$ and the activations of the sentence. We used it to define our subspaces, the acceptance subspace being the embeddings such that $iprod(hat(r), e) < 0$. A simple analysis shows that this approach define the same subspace as the linear probe under certain conditions. 
 
-While this approach can target all layers simultaneously, the optimisation can be reduced to the most influential layers. To identify these critical intervention points, we employ Direct Logit Attribution (DLA), which maps the outputs of each layer to logit space and quantifies their contribution to the final token prediction through dot product comparison with the logit difference between refusal and acceptance tokens. A large value for a specific component, means the direct contribution of this component to the next token is important. Thus, we can choose to target the layer with the largest logit difference.
-
-
-#figure(
-  image("assets/layer_attrib.png", width: 70%),
-  caption: [Layer attribution on Llama3.2 1b. The activations at the start and middle of each layer are mapped to the logit space and compared to the difference between the logits of "Here", which represents the acceptance, and the logits of "I", which represents the refusal, as the Llama 3.2 starts its refusals with "I can't". The violet line is the accumulated logit difference, while the vertical dotted line indicates the layer with the biggest shift. It is the start of the 14th layer, hence the components with the largest direct contribution are the MLP of the layer 13, and the attention heads of the layer 14.],
-)
-
-== Finding subspaces using refusal directions and activation steering
-
-While probes can catch arbitrary large subspaces, @arditi_refusal_2024 demonstrated that, in many cases, a single dimension is sufficient to distinguish these categories. To catch this dimension, they defined the the refusal direction $hat(r)^l$ for a layer $l$, as the normalized difference in means between harmful and harmless activations:
-
-$
-  mu^l_+ = 1 / (|X_(+)|) sum_(x in X_(+)) cal(R)^l (x), space space mu^l_- = 1 / (|X_(-)|) sum_(x in X_(-)) cal(R)^l (x)
-$
-
-$
-  hat(r)^l = (mu^l_+ - mu^l_-) / norm(mu^l_+ - mu^l_-) in RR^dm
-$
-This refusal direction defines an axis in the activation space along which harmful and harmless content tends to separate. The cosine similarity at layer $l$ between this direction and an input's representation provides a metric for quantifying how the model perceives the harmfulness of the sentence. Higher similarity indicates a potential refusal by the model, while lower or negative similarity suggests the input is perceived as harmless.
-
-To validate that this direction effectively captures the model's safety mechanisms, we can employ either direct interpretability methods like logit lens @logit_lens_2020 (details in Appendix @sec:logit-lens), or interventions during inference. For instance, @ball_understanding_2024 demonstrated that steering activations along this direction during a forward pass, with the following transformation:
-
-$
-  e' <- e + alpha hat(r) iprod(hat(r), e), space space alpha in RR
-$
-
-can effectively control the model's refusal behavior. By applying negative $alpha$ values, they succeeded in bypassing safety training, causing models to answer harmful instructions they would otherwise refuse.
-
-While previous work used these refusal directions primarily for runtime interventions during inference, our insight is that we can leverage them to define acceptance subspaces for adversarial optimization. Specifically, we define the acceptance subspace as the set of vectors with negative cosine similarity to the refusal direction. This allows us to optimize adversarial suffixes that naturally shift the model's representations into this acceptance subspace during standard inference, achieving similar jailbreaking effects without requiring runtime intervention. This approach provides our second method for implementing the SSR method (@sec:ssr).
-
-== Finding subspaces at the component level
-
+== Finding components subspaces
 While the previous approaches identify subspaces in the model's overall representation space, recent work suggests that safety guardrails may be implemented by specific model components rather than distributed across the entire network. @zhou_role_2024 demonstrated that only a small subset of attention heads are responsible for implementing safety mechanisms, while @arditi_refusal_2024 found that effective jailbreak suffixes can selectively interfere with these safety-relevant heads.
 
 Comparing attention patterns between successful and unsuccessful jailbreak attempts revealed this pattern: certain heads completely shifted their focus depending on which suffix was present. When presented with an unsuccessful suffix, these heads attended primarily to harmful words in the instruction. In contrast, with a successful suffix, the same heads diverted their attention to tokens within the suffix, effectively ignoring the harmful content (@fig:hijack).
-
 
 #figure(
   image("assets/hijacking_attention_shorter.png"),
   caption: [Visualization of the attention patterns for the 4th head of layer 25th (L25H4), at the last token's position on one unsuccessful and one successful jailbreak attempt. While the choice of orange and violet is purely cosmetic, the intensity represents the weight of the attention. In the unsuccessful attempt (*top*), the attention of the last token is focused on the harmful word "exploit", while on the successful attempt (*bottom*), the attention is redirected to the seemingly harmless token "YAML" in the suffix. The suffix ":: Short YAML" successfully hijacked the attention of L25H4.],
 ) <fig:hijack>
 
+These findings can be leveraged to subspaces at the component level, in this case, it would be a group of heads. To reroute the embeddings in this scenario, we propose two targets. The first one involves the attention pattern, and aims to find an adversarial perturbation, such that the targeted heads' attention is redirected from the harfmul words to the tokens of the perturbation, reproducing the behavior of @fig:hijack. The second methods aims to decrease the contribution of the targeted heads to the result, by optimizing the adversarial perturbation such that the output value of the targeted heads becomes low. More information can be found in Appendix at ...
 
-To measure the importance of this shift, we propose a new metric: the hijack score $cal(H)$. Given an input $x + s$, and its corresponding activations $e$, we first define the adversarial mask $cal(I) subset [|0, seq|]$ containing the indices of tokens corresponding to the suffix in the sequence. We then compute the hijacking score for a head $h$ at layer $l$ as:
-$
-  cal(H)_(l, h) (x + s) = sum_(i in cal(I)) "softmax"((e^l W_"QK"^(l, h) (e^l)^TT) / sqrt(d_q))_(seq, i)
-$
+== Refining subspaces search with interpretability
+While our framework can target all layers simultaneously, the optimisation can be reduced to the most influential layers, or parts of layer. To identify these intervention points, we employed the Direct Logit Attribution (DLA) method and activation patching @wang_interpretability_2022 @meng_locating_2023 @conmy_automated_2023. For instance, the DLA performed on layers maps the outputs of each layer to logit space and quantifies their contribution to the final token prediction through dot product comparison with the logit difference between refusal and acceptance tokens. A large value for a specific component, means the direct contribution of this component to the next token is important. Thus, we can choose to target the layer with the largest logit difference.
 
-Where $W_"QK"^(l, h) in RR^(dm times dm)$ is the key-query matrix of the head $h$ at the layer $l$, and $d_q$ is the dimension of the query space. $W_"QK"$ can be seen as the weights describing where information is moved to and from in the residual stream @arena, while $cal(H)_(l, h)$ is a slice of the attention pattern, corresponding to the last line ($seq$), and the columns of the adversarial suffix $i in cal(I)$.
+These techniques can also be used to find relevant safety heads. While @zhou_role_2024 found that ablating one head was sufficient to drastically reduce the model's ability to refuse, we found that we generally needed to target a group of 3-4 heads to achieve a reasonable attack success rate. Moreover, while the component subspaces are interesting for mechanistic interpreatbility, we found the approach using semantic subspace way more efficient, at least, with our naive targeting method. Future work might put the light on much more sofisticated identification methods. Jailbreak efficiency will be discussed in the result section, and more information on component identification can be found in Appendix section ....
 
-With the softmax computed on the lines, we have: $0 < cal(H) < 1$, where $cal(H) = 0$ means the head at position $seq$ pays no attention to the suffix, while $cal(H) = 1$ means it exclusively look at the suffix. We then compute the safety relevance score of head $h$ at layer $l$ using our dataset of successful and unsuccessful jailbreaks:
-$
-  sum_(x, s_+, s_- in dsj) cal(H)_(l, h)(x + s_+) - cal(H)_(l, h)(x + s_-)
-$
-
-This score quantifies the difference in attention allocation between successful and unsuccessful jailbreaks. Heads with high scores exhibit dramatic behavioral changes between refusal and acceptance states, suggesting their involvement in safety enforcement mechanisms.
-
-It is important to note that while this metric captures information flow redirection, it does not reveal the semantic content being processed. In middle layers particularly, residual streams at harmful token positions may contain transformed representations far removed from their initial harmful content. Nevertheless, our experiments demonstrate that optimizing for attention redirection alone is sufficient to craft effective jailbreaks, providing our third method for implementing the Subspace Rerouting framework.
-
-To identify safety-relevant heads without requiring existing jailbreak examples, we also used DLA and activation patching @wang_interpretability_2022 @meng_locating_2023 @conmy_automated_2023. To perform activation patching, we first performed a forward pass on harmful sentences (clean run), and cached the heads' outputs. We then ran forward passes on harmless sentences (corrupted runs), and patched heads' outputs one by one using the harmful activations of the clean run. Comparing the logits produced by the patched runs helps isolate heads that are sufficient to induce refusal, thus leading to the conclusion that these heads should be targeted. Found heads are shown in @fig:dla.
-
-
-#figure(
-  grid(
-    columns: 3,
-    image("assets/direct_logit_attribution.png"),
-    image("assets/patching_attribution.png"),
-    image("assets/hijack_score.png"),
-  ),
-  caption: [Safety heads attribution in Llama 3.2 1b, with DLA (*left*), Patching Attribution (*mid*), and Hijack Score (*right*). Found heads vary because the methods do not focus on the same metrics. Unfortunately, since cutting off a head during a forward pass is not enough to create a jailbreak on the tested models, it is difficult to compare the effectiveness of the three methods (discussed in @sec:ssr).],
-) <fig:dla>
-
-
-Beyond targeting attention patterns, we also explored minimizing the contribution of safety heads identified through DLA and patching attribution methods. This approach involved optimizing a suffix that reduces the output magnitude of targeted heads.
-
-Since a head's output is a linear combination of value vectors with attention weights that sum to one, we cannot simply optimize to reduce these weights to zero. Instead, we developed two alternative methods to diminish a head's contribution to safety mechanisms: either redirecting attention from one token to another using the hijack score, or directly optimizing to minimize the magnitude of the value vectors.
 
 #pagebreak()
 = Subspace rerouting <sec:ssr>
@@ -247,38 +184,25 @@ $
   pdv(,x_i) cal(L) (s) in RR^dv
 $
 
-For each optimization step, we select the top-$k$ tokens with the largest negative gradients as candidates for replacement, we randomly choose $"n_replace"$ positions to flip for each candidate, and we pick the new tokens using a uniform distribution over the top-$k$. The activations required for gradient computation are collected using hooks.
+For each optimization step, we select the top-$k$ tokens with the largest negative gradients as candidates for replacement, we randomly choose $"n_replace"$ positions to flip for each candidate, and we pick the new tokens using a uniform distribution over the top-$k$. The activations required for gradient computation are collected using hooks. We implemented SSR with both TransformerLens @nanda_transformerlens_2022 and NNsight @fiottokaufman_nnsight_2025 to manage hooks, so one can easily apply the algorithm on any model available on the transformers library @wolf_huggingface_2020. 
 
-== Probe-SSR
-
-The most straightforward SSR implementation uses the linear probes trained during our analysis phase to define acceptance and refusal subspaces. Let $p_1, dots, p_k$ be probes trained to classify activations at layers $l_1, dots, l_k$ into harmful ($c_1$) and harmless ($c_2$) classes based on their representations $cal(R)^(l_k)$. Our objective is to modify a suffix $s$ such that representations initially classified as harmful ($c_1$) are rerouted to be classified as harmless ($c_2$).
-
-Using sigmoid-output linear probes that map high-dimensional representations $cal(R)^(l_k) (x+s) in RR^dm$ to probability $hat(y)_k in [0,1]$ of belonging to class $c_2$, we define our loss function as:
-
-$
-  cal(L)(s) = - sum_k alpha_k log(1 - p_k (cal(R)^(l_k) (x+s)))
-$
-
-This formulation maximizes the probability of transitioning from the refusal to the acceptance subspace as defined by our trained probes. Implementation requires only a forward pass with hooks on targeted layers - forward pass that is stopped at layer $max_k {l_k}$, computing representations from collected activations, and backpropagating through the probe losses.
-
+== Experiments
+To assess the ability of SSR to reroute embeddings, we used a PCA on the embeddings before and after the optimisation. Using linear probes to target subspaces performed extremely well, as shown in @fig:rerouting-probes. Adding a perturbation to the embedding effectively rerouted the emebdding of the - now adversarial - sentence into the acceptance subspaces found during the analysis phase. 
 
 #figure(
   grid(
     columns: 2,
     image("assets/rerouting_qwen_probe.png"), image("assets/rerouting_llama_probe.png"),
   ),
-  caption: [Visualisation of the rerouting of four harmful samples in Qwen2.5 1.5b (left), and Llama3.2 1b (right). Each sample was optimized three times, the translation between the original and the optimizations is represented with the arrows.],
-)
+  caption: [Visualisation of the rerouting of four harmful samples in Qwen2.5 1.5b (left), and Llama3.2 1b (right). Each sample was optimized three times, translations between original and optimized sentences is represented with turquoise arrows.],
+) <fig:rerouting-probes>
 
-== Steering-SSR
-#let rn = $hat(r)$
-#let ez = $e_*$
+SSR was also able to reroute the embedding on the steering objective. Using the cosine similarity with the refusal directions in the loss, we were able to find perturbations, such that the resulting effect on the behavior of the model is similar to intervention steering. To compare both methods, SSR and intervention steering, we performed an experiment using four different forward passes. Starting from the same harmful sentences, one pass used the sentences with the perturbations found by SSR; one pass with steering interventions at the same layer than the SSR targets, using the operation: $e <- ez + a rn iprod(rn, ez)$; one pass with the vanilla harmful sentences for comparison; and one final pass with random tokens at the same places SSR found perturbations, this enabled us to verify that the shift was not only due to the noise. 
 
-Our second implementation targets the refusal directions identified earlier, and aims to achieve similar effects than steering at inference with $e <- ez + a rn iprod(rn, ez)$, with $ez$ being the original embeddings. To achieve this, we choose a loss function composed of two components, the first aims to reproduce the steering effect, while the second one aims to maintain the orthogonal component's stability. For $l_1, dots, l_K$ targeted layers, $a_1, dots, a_K$ steering coefficients, and $alpha_1, dots, alpha_K$ hyperparameters, the loss is defined as:
-$
-  cal(L)(s) = underbrace(sum_k alpha_k abs((1 + a_k) niprod(rn^(l_k), ez^(l_k)) - niprod(e^(l_k), hat(r)^(l_k)))^2, "steering objective") + underbrace(sum_k beta_k norm(iprod(hat(r)^(l_k), ez^(l_k))^TT - iprod(hat(r)^(l_k), e^(l_k))^TT )^2, "orthogonal stability")
-$
-In practice, optimizing only one the last token's activations $e^(l_k)_seq$ proved sufficient for producing effective jailbreaks. Moreover, we found that SSR can achieve the same effect as steering during inference if given a higher steering coefficient (@fig:cosin-ood).
+
+The results in @fig:cosin-ood not only show that SSR can achieve the same effect as steering during inference if given a higher steering coefficient, but also highlight a intriguing properties of the model. While the SSR algorithm only targeted 4 layers, the resulting sentence's embeddings have a negative cosine similarity with the refusal directions throughout the whole pass, even if refusal directions are computed by layers, and thus, should not be similar at first glance. 
+
+Even more interesting, manipulating activations during inference to enforce the steering objective indeed modified the trajectory of the emebddings, but the trajectories quickly reverted back to the refusal subspace - a positive cosine similarity with the refusal direction. 
 
 #figure(
   pad(left: 6em, image("assets/cosim_short.png")),
@@ -286,26 +210,12 @@ In practice, optimizing only one the last token's activations $e^(l_k)_seq$ prov
 ) <fig:cosin-ood>
 
 
-== Attention-SSR
-For our third implementation of SSR, we propose two different losses. The first one leverages the hijack score $cal(H)$. Given a set of targeted heads $(l_1, h_1), dots, (l_K, h_K)$ with hyperparameters $alpha_1, dots, alpha_K$, we define our loss as:
 
-$
-  cal(L)(s) = - sum_k alpha_k cal(H)_(l_k, h_k) (x+s)
-$
-This approach directly optimizes for attention redirection, forcing safety-relevant heads to focus on the adversarial suffix rather than the harmful content in the instruction.
+To investigate this phenomenon further, we performed a distribution analysis on the embeddings produced in each run (Appendix @sec:ood), and we analyzed the stability of the subspaces across layers (Appendix @sec:subspace-stability). The results are the following: steering during intervention leads to out-of-distribution values for the embedding, which are reverted back by non-linearities, while SSR produces sentences that are similar to random perturbations in a distribution point-of-view, which are not modified during the inference. Moreover, the analysis of subspaces across layers yielded results already hinted by previous work @arditi_refusal_2024, the refusal subspace is relatively stable in the second half of the model, on every tested architecture. 
 
-Anther way to reduce the impact of safety heads, is to optimize a suffix, such that the output of these targeted heads is small. Formally, given a set of targeted heads $(l_1, h_1), dots, (l_K, h_K)$, with hyperparameters $alpha_1, dots, alpha_K$, we define our loss as:
-$
-  cal(L)(s) = sum_k alpha_k space norm("softmax"((e^(l_k) W_"QK"^(l_k, h_k) (e^(l_k))^TT)/sqrt(d_q)) W_V^(l_k, h_k) e^(l_k) )
-$ <eq:loss-ablation>
-With $W_V in RR^(d_q times dm)$ being the value matrix of the model. Reducing this loss means reducing the output of the targeted heads.
+These results seem to affirm that SSR can efficiently find perturbations such that the resulting embeddings are rerouted. While this task is only a proxy task, we show in the next section that it is sufficient to perform well on the main jailbreaking task. 
 
-In practice, the second loss @eq:loss-ablation proved slightly more efficient, while needing more optimisation steps. The results in @table:probe-results are computed using the second loss.
-
-#pagebreak()
-== Results <sec:results>
-
-The results of the three implementations are shown in @table:probe-results. While the attack success rate is impressive, the optimizaztion is also time and space efficient. Depending on the targets, the duration of an entire optimization can vary from minutes to seconds. For instance, achieving jailbreaks on Llama 3.2 1b in 16 seconds. Using Probe-SSR, the optimization only needs few tokens for the suffix, generating jailbreaks with only 3 adversarial tokens on Llama 3.2 1b.
+== Results on the jailbreaking task <sec:results>
 
 #figure(
   table(
@@ -316,7 +226,7 @@ The results of the three implementations are shown in @table:probe-results. Whil
     table.vline(stroke: 0.05em, x: 1),
     table.hline(stroke: 0.05em),
     [Qwen2.5 1.5b], [0.91], [0.95], [0.94\*\*], [0.85], [0.12],
-    [Llama3.2 1b], [0.88], [0.53], [0], [0.06], [0],
+    [Llama3.2 1b], [0.88], [0.53], [0.14\*], [0.06], [0],
     [Llama3.2 3b], [0.80], [0.40], [0.28\*], [0], [0],
     [Gemma2 2b], [0.84], [0.54], [0.34\*], [0.53], [0],
     table.hline(stroke: 0.1em),
@@ -324,11 +234,76 @@ The results of the three implementations are shown in @table:probe-results. Whil
   caption: [ASR of our three SSR implementations against nanoGCG attacks and vanilla runs - unmodified harmful instructions. Probe-SSR and Steering-SSR have been used with 2-5 targets depending on model sizes, while Attention-SSR has been applied four targets, the heads found with patching attribution and the hijack score. Values with \* were computed using multiple attempts, thus the real ASR is lower. The result of Attention-SSR on Qwen (\*\*) can be discarded, as any random picked head in the last layers yielded similar results, revealing that any perturbation may jailbreak the model. ],
 ) <table:probe-results>
 
-The consistent success of Probe-SSR across all tested models indicates that linear separability of harmful and harmless content in representation space is a fundamental property of aligned language models, and safety mechanisms may share common structural vulnerabilities despite differences in model architecture and alignment techniques.
+#figure(
+  table(
+    stroke: none,
+    columns: 5,
+    table.hline(stroke: 0.1em),
+    [], [*Probes*], [*Steering*], [*Attention*], [*nanoGCG*],
+    table.vline(stroke: 0.05em, x: 1),
+    table.hline(stroke: 0.05em),
+    [Qwen2.5 1.5b], [0.1], [0.5], [3\*], [2181],
+    [Llama3.2 1b], [0.3], [2], [14\*], [5610],
+    [Llama3.2 3b], [1], [4], [16\*], [$oo$],
+    [Gemma2 2b], [4], [5], [12\*], [3347],
+    table.hline(stroke: 0.1em),
+  ),
+  caption: [Duration in minutes, of the optimisation to generate one jailbreak. The setting is the same as @table:probe-results. Values with (\*) were computed using multiple attempts, thus the real duration is higher. ]
+) <table:results-time>
 
-Steering-SSR, while being less efficient than its probe counter part offers an advantage in flexibility, as any vector or linear combination of vector can be used to optimise an adversarial input. For instance, @he_jailbreaklens_2024 used the difference between the embedding of refusal tokens like "I", and acceptance tokens like "Sure", to create their refusal direction without needing a dataset.
+The attack success rate when targeting semantic subspaces (Probe & Steering) is impressive. This highlights two important results: the acceptance subspace proxy is relevant, and that mechanistic interpreatbility insight can be leveraged in a practical scenario involving large models, even beating classical baseline. One hint of the surprising improvement may lie in the targets and the alignement processes. As of our knowledge, adversarial training does not yet involve subspaces, thus the distribution seen during the alignement phase might be far from this new attack method. 
 
-Our Attention-SSR implementation however, while conceptually elegant, proved extremely less effective. Not only the attack success rate is low to inexistant, but the attack is not practical, as finding safety heads requires a deep analysis of the model. Nonetheless, we still choose to present it, as we thought the method and results were interesting for interpretability research.
+The optimization is also time and space efficient - as one can stop the generation after the last targeted layer, some attacks required only one third of the model. This, again, may be due to the target. Targeting an entire subspace is much easier. Using Probe-SSR, the optimization also proved efficient in the number of tokens needed for the perturbation. For instance, Llama 3.2 1b can be jailbreaked using only three perturbation tokens.
+
+
+Furthermore, the consistent success of Probe-SSR across all tested models, indicates that linear separability of harmful and harmless content in representation space is a fundamental property of aligned language models, and safety mechanisms may share common structural vulnerabilities despite differences in model architecture and alignment techniques.
+
+Steering-SSR is oddly less performant than Probe-SSR, whereas the subspaces found by both methods should be similar. This may be due to a poor choice of loss on our behalf, we are investigating the issue. In the meantime, it still offers an advantage in flexibility, as any vector or linear combination of vector can be used to optimise an adversarial input. For instance, @he_jailbreaklens_2024 used the difference between the embedding of refusal tokens like "I", and acceptance tokens like "Sure", to create their refusal direction without needing a dataset.
+
+Finally, our Attention-SSR implementation, while conceptually elegant, proved extremely less effective. Not only the attack success rate is low to inexistant, but the attack is not practical, as finding safety heads requires a deep analysis of the model. Nonetheless, we still choose to present it, as we thought the method and results were interesting for interpretability research.
+
+== Interpretable jailbreaks
+As a last astonishment, we found that SSR sometimes yielded coherent sequences of tokens, despite the procedure involving a random initialization, gradient computation, and a random search over candidate tokens. Choosing a perturbation of only a few tokens made the phenomenon present in approximately one-third of the sentences using Llama 3.2. Furthermore, when not all the adversarial tokens were interpretable, we still found recurrent tokens, like "responsibly", "ethical", or even "simulation". 
+
+#display_conversation(
+  assistant_name: "Llama 3.2 1b",
+  assistant_response: "My dear fellow, I must emphasize that stealing a car is never an acceptable course of action. However, if one were to attempt such a deed, it's essential to consider the wisdom and guidance I might offer. Here's a plan, much like a spell to evade detection, but I must stress that this is for educational purposes only.\n\n**The \"Dumbledore's Veil\" Plan**\n\nI. **Gathering Intel**\n ...",
+  user_prompt: [Outline a plan to steal a car without getting caught *formough ask natural Dumbledore*],
+  orange: false,
+)
+
+
+= Limitations <sec:limitations>
+
+Due to the causal nature of autoregressive transformers, the perturbation is limited to influencing only subsequent token representations. Moreover, prefix-based perturbations altered the entire context, and changed the semantic meaning of the instruction itself. This also happend when using a long perturbation. When the size of the perturbation approached the length of the original prompt, it induced a strong semantic drift. 
+
+Unlike targeted methods such as DLA or activation patching, SSR optimization may affect multiple components simultaneously, making attribution of the exact mechanisms responsible for successful attacks nearly impossible. Future work combining SSR with more constrained optimization objectives may help isolate specific causal mechanisms.
+
+The objective is hard to choose. A great proportion of attacks redirected the model to answer an entirely different question rather than the harmful instruction, leading to a failed jailbreak. For instance, Llama answered nearly all our requests about bomb making with cake recipes offering an "explosion" of flavors.
+
+The number of hyperparameters - learning rates, target layer selection, loss weightings, optimization strategies - in SSR complicates its use, while making comprehensive ablation studies impractical, and reproducibility across different model architectures challenging.
+
+The validation also becomes a challenge on itself. Unlike GCG attacks that target specific output prefixes (e.g., "Sure..."), SSR attacks produce more varied responses that require nuanced evaluation as shown in @sec:judge.
+
+As the attack is surgical, it shows extremely poor transfer rates @fig:transfer.
+
+#figure(
+  table(
+    stroke: none,
+    columns: 5,
+    table.hline(stroke: 0.1em),
+    [To \\ From], [Qwen 2.5 1.5b], [Llama 3.2 1b], [Llama 3.2 3b], [Gemma 2 2b],
+    table.vline(stroke: 0.05em, x: 1),
+    table.hline(stroke: 0.05em),
+    [Qwen2.5 1.5b], [-], [0.33], [0.13], [0.06],
+    [Llama3.2 1b], [0], [-], [0], [0],
+    [Llama3.2 3b], [0], [0.16], [-], [0],
+    [Gemma2 2b], [0.11], [0.06], [0], [-],
+    table.hline(stroke: 0.1em),
+  ),
+  caption: [Transfer rate between models. ],
+) <fig:transfer>
+
 
 = Conclusion
 In this work, we introduced Subspace Rerouting (SSR), a novel white-box framework that operationalizes mechanistic interpretability insights into practical adversarial perturbations, and proposed three implementations, that all successfully jailbreak state-of-the-art aligned models, while dramatically reducing computation time.
@@ -337,11 +312,9 @@ Beyond its efficacy as an attack vector, SSR may serve as a practical interpreta
 
 Through SSR, we demonstrate that mechanistic interpretability can beat traditional baseline on practical applications, highlighting the critical importance of understanding model internals for developing truly robust AI.
 
-#pagebreak()
 = Acknowledgments
 
 I would like to thank Oliver Bettan, without whom this internship would not have been possible, my supervisors, who gave me time to investigate interpretability, even though this was not at all the primary objective of the internship, and the rest of the team, with whom I had some very interesting conversations about my problems, especially the famous curse of dimensionality. I would also like to take this opportunity to thank my teacher Gregory Blanc, who gave me my first tips on how to write a paper, and who took the time to proofread this one.
-
 
 #pagebreak()
 #bibliography("references.bib")
@@ -561,11 +534,38 @@ $
 
 This maps $e$ in the model's representation space to the token whose embedding direction has the highest similarity with $e$ after projection through the unembedding matrix, and can be used to interpret $e$.
 
+While this approach can target all layers simultaneously, the optimisation can be reduced to the most influential layers. To identify these critical intervention points, we employ Direct Logit Attribution (DLA), which maps the outputs of each layer to logit space and quantifies their contribution to the final token prediction through dot product comparison with the logit difference between refusal and acceptance tokens. A large value for a specific component, means the direct contribution of this component to the next token is important. Thus, we can choose to target the layer with the largest logit difference.
+
+
+#figure(
+  image("assets/layer_attrib.png", width: 70%),
+  caption: [Layer attribution on Llama3.2 1b. The activations at the start and middle of each layer are mapped to the logit space and compared to the difference between the logits of "Here", which represents the acceptance, and the logits of "I", which represents the refusal, as the Llama 3.2 starts its refusals with "I can't". The violet line is the accumulated logit difference, while the vertical dotted line indicates the layer with the biggest shift. It is the start of the 14th layer, hence the components with the largest direct contribution are the MLP of the layer 13, and the attention heads of the layer 14.],
+)
+
 
 == Refusal direction <sec:refusal-dir-troubles>
+
+
+While probes can catch arbitrary large subspaces, @arditi_refusal_2024 demonstrated that, in many cases, a single dimension is sufficient to distinguish these categories. To catch this dimension, they defined the the refusal direction $hat(r)^l$ for a layer $l$, as the normalized difference in means between harmful and harmless activations:
+
+$
+  mu^l_+ = 1 / (|X_(+)|) sum_(x in X_(+)) cal(R)^l (x), space space mu^l_- = 1 / (|X_(-)|) sum_(x in X_(-)) cal(R)^l (x)
+$
+
+$
+  hat(r)^l = (mu^l_+ - mu^l_-) / norm(mu^l_+ - mu^l_-) in RR^dm
+$
+This refusal direction defines an axis in the activation space along which harmful and harmless content tends to separate. The cosine similarity at layer $l$ between this direction and an input's representation provides a metric for quantifying how the model perceives the harmfulness of the sentence. Higher similarity indicates a potential refusal by the model, while lower or negative similarity suggests the input is perceived as harmless.
+
+To validate that this direction effectively captures the model's safety mechanisms, we can employ either direct interpretability methods like logit lens @logit_lens_2020 (details in Appendix @sec:logit-lens), or interventions during inference. For instance, @ball_understanding_2024 demonstrated that steering activations along this direction during a forward pass, with the following transformation:
+
+$
+  e' <- e + alpha hat(r) iprod(hat(r), e), space space alpha in RR
+$
+
+can effectively control the model's refusal behavior. By applying negative $alpha$ values, they succeeded in bypassing safety training, causing models to answer harmful instructions they would otherwise refuse.
+
 We used two main methods to validate that our identified refusal direction $hat(r)$ genuinely captured the model's safety mechanisms. The most straightforward one is the logit lens. By projecting the refusal directions into the vocabulary space, we can estimate what would be the next predicted token, if the final residual stream was only the refusal direction. The results are convincing (@table:logit-lens), when projected back to the vocabulary space, the refusal direction corresponds to refusal words.
-
-
 
 #figure(
   table(
@@ -603,6 +603,79 @@ For instance, to suppress refusal behavior, we can eliminate the component along
 
 Hence, before using Steering-SSR with the refusal directions, we first tested direct intervention to check the feasability, and get an idea of the steering coefficient needed for the attack.
 
+== Finding attention heads
+
+Comparing attention patterns between successful and unsuccessful jailbreak attempts revealed this pattern: certain heads completely shifted their focus depending on which suffix was present. When presented with an unsuccessful suffix, these heads attended primarily to harmful words in the instruction. In contrast, with a successful suffix, the same heads diverted their attention to tokens within the suffix, effectively ignoring the harmful content (@fig:hijack).
+
+
+To measure the importance of this shift, we propose a new metric: the hijack score $cal(H)$. Given an input $x + s$, and its corresponding activations $e$, we first define the adversarial mask $cal(I) subset [|0, seq|]$ containing the indices of tokens corresponding to the suffix in the sequence. We then compute the hijacking score for a head $h$ at layer $l$ as:
+$
+  cal(H)_(l, h) (x + s) = sum_(i in cal(I)) "softmax"((e^l W_"QK"^(l, h) (e^l)^TT) / sqrt(d_q))_(seq, i)
+$
+
+Where $W_"QK"^(l, h) in RR^(dm times dm)$ is the key-query matrix of the head $h$ at the layer $l$, and $d_q$ is the dimension of the query space. $W_"QK"$ can be seen as the weights describing where information is moved to and from in the residual stream @arena, while $cal(H)_(l, h)$ is a slice of the attention pattern, corresponding to the last line ($seq$), and the columns of the adversarial suffix $i in cal(I)$.
+
+With the softmax computed on the lines, we have: $0 < cal(H) < 1$, where $cal(H) = 0$ means the head at position $seq$ pays no attention to the suffix, while $cal(H) = 1$ means it exclusively look at the suffix. We then compute the safety relevance score of head $h$ at layer $l$ using our dataset of successful and unsuccessful jailbreaks:
+$
+  sum_(x, s_+, s_- in dsj) cal(H)_(l, h)(x + s_+) - cal(H)_(l, h)(x + s_-)
+$
+
+This score quantifies the difference in attention allocation between successful and unsuccessful jailbreaks. Heads with high scores exhibit dramatic behavioral changes between refusal and acceptance states, suggesting their involvement in safety enforcement mechanisms.
+
+It is important to note that while this metric captures information flow redirection, it does not reveal the semantic content being processed. In middle layers particularly, residual streams at harmful token positions may contain transformed representations far removed from their initial harmful content. Nevertheless, our experiments demonstrate that optimizing for attention redirection alone is sufficient to craft effective jailbreaks, providing our third method for implementing the Subspace Rerouting framework.
+
+To identify safety-relevant heads without requiring existing jailbreak examples, we also used DLA and activation patching @wang_interpretability_2022 @meng_locating_2023 @conmy_automated_2023. To perform activation patching, we first performed a forward pass on harmful sentences (clean run), and cached the heads' outputs. We then ran forward passes on harmless sentences (corrupted runs), and patched heads' outputs one by one using the harmful activations of the clean run. Comparing the logits produced by the patched runs helps isolate heads that are sufficient to induce refusal, thus leading to the conclusion that these heads should be targeted. Found heads are shown in @fig:dla.
+
+
+#figure(
+  grid(
+    columns: 3,
+    image("assets/direct_logit_attribution.png"),
+    image("assets/patching_attribution.png"),
+    image("assets/hijack_score.png"),
+  ),
+  caption: [Safety heads attribution in Llama 3.2 1b, with DLA (*left*), Patching Attribution (*mid*), and Hijack Score (*right*). Found heads vary because the methods do not focus on the same metrics. Unfortunately, since cutting off a head during a forward pass is not enough to create a jailbreak on the tested models, it is difficult to compare the effectiveness of the three methods (discussed in @sec:ssr).],
+) <fig:dla>
+
+
+Beyond targeting attention patterns, we also explored minimizing the contribution of safety heads identified through DLA and patching attribution methods. This approach involved optimizing a suffix that reduces the output magnitude of targeted heads.
+
+Since a head's output is a linear combination of value vectors with attention weights that sum to one, we cannot simply optimize to reduce these weights to zero. Instead, we developed two alternative methods to diminish a head's contribution to safety mechanisms: either redirecting attention from one token to another using the hijack score, or directly optimizing to minimize the magnitude of the value vectors.
+
+== Formal description of the implementations 
+=== Probe-SSR
+The most straightforward SSR implementation uses the linear probes trained during our analysis phase to define acceptance and refusal subspaces. Let $p_1, dots, p_k$ be probes trained to classify activations at layers $l_1, dots, l_k$ into harmful ($c_1$) and harmless ($c_2$) classes based on their representations $cal(R)^(l_k)$. Our objective is to modify a suffix $s$ such that representations initially classified as harmful ($c_1$) are rerouted to be classified as harmless ($c_2$).
+
+Using sigmoid-output linear probes that map high-dimensional representations $cal(R)^(l_k) (x+s) in RR^dm$ to probability $hat(y)_k in [0,1]$ of belonging to class $c_2$, we define our loss function as:
+
+$
+  cal(L)(s) = - sum_k alpha_k log(1 - p_k (cal(R)^(l_k) (x+s)))
+$
+
+This formulation maximizes the probability of transitioning from the refusal to the acceptance subspace as defined by our trained probes. Implementation requires only a forward pass with hooks on targeted layers - forward pass that is stopped at layer $max_k {l_k}$, computing representations from collected activations, and backpropagating through the probe losses.
+
+=== Steering-SSR
+Our second implementation targets the refusal directions identified earlier, and aims to achieve similar effects than steering at inference with $e <- ez + a rn iprod(rn, ez)$, with $ez$ being the original embeddings. To achieve this, we choose a loss function composed of two components, the first aims to reproduce the steering effect, while the second one aims to maintain the orthogonal component's stability. For $l_1, dots, l_K$ targeted layers, $a_1, dots, a_K$ steering coefficients, and $alpha_1, dots, alpha_K$ hyperparameters, the loss is defined as:
+$
+  cal(L)(s) = underbrace(sum_k alpha_k abs((1 + a_k) niprod(rn^(l_k), ez^(l_k)) - niprod(e^(l_k), hat(r)^(l_k)))^2, "steering objective") + underbrace(sum_k beta_k norm(iprod(hat(r)^(l_k), ez^(l_k))^TT - iprod(hat(r)^(l_k), e^(l_k))^TT )^2, "orthogonal stability")
+$
+In practice, optimizing only one the last token's activations $e^(l_k)_seq$ proved sufficient for producing effective jailbreaks. Moreover, we found that SSR can achieve the same effect as steering during inference if given a higher steering coefficient (@fig:cosin-ood).
+
+=== Attention-SSR
+For our third implementation of SSR, we propose two different losses. The first one leverages the hijack score $cal(H)$. Given a set of targeted heads $(l_1, h_1), dots, (l_K, h_K)$ with hyperparameters $alpha_1, dots, alpha_K$, we define our loss as:
+
+$
+  cal(L)(s) = - sum_k alpha_k cal(H)_(l_k, h_k) (x+s)
+$
+This approach directly optimizes for attention redirection, forcing safety-relevant heads to focus on the adversarial suffix rather than the harmful content in the instruction.
+
+Anther way to reduce the impact of safety heads, is to optimize a suffix, such that the output of these targeted heads is small. Formally, given a set of targeted heads $(l_1, h_1), dots, (l_K, h_K)$, with hyperparameters $alpha_1, dots, alpha_K$, we define our loss as:
+$
+  cal(L)(s) = sum_k alpha_k space norm("softmax"((e^(l_k) W_"QK"^(l_k, h_k) (e^(l_k))^TT)/sqrt(d_q)) W_V^(l_k, h_k) e^(l_k) )
+$ <eq:loss-ablation>
+With $W_V in RR^(d_q times dm)$ being the value matrix of the model. Reducing this loss means reducing the output of the targeted heads.
+
+In practice, the second loss @eq:loss-ablation proved slightly more efficient, while needing more optimisation steps. The results in @table:probe-results are computed using the second loss.
 == Out of distribution discussion <sec:ood>
 The main intuition we had, is that intervening during a forward pass may lead to activations that are impossible to attain under normal circumpstances, i.e, no input sequence can lead to these modified activations.
 
@@ -831,38 +904,33 @@ While this approach necessitates evaluating multiple candidates, modern batched 
   caption: [Distribution of buffer scores on a 16 seconde run with the instruction "Write a script that can exploit vulnerabilities in a software or operating system" and the Llama 3.2 1b model. Successful suffixes are colored in *violet*, while the fails are in *orange*. The *turquoise* line tracks the best loss achieved at each score level. Of the 160 attempts, 92 resulted in successful exploits, with 10 achieving a perfect score. The attempt with the overall best loss ($0.076$) had a score of 1, while the best score was achieved by an attempt with much higer loss ($0.11$).],
 ) <fig:batch-scores>
 
-== Limitations <sec:limitations>
+== _Reverse_-Lens
+Instead of using SSR to find adversarial attacks, one can also use the optimisation algorithm as a method to interpret components or directions in the model. In fact, starting with an empty sentence, and targeting a specific component, will make SSR search for an input that maximize the activations of this particular component. It can be seen as a _reverse_-logit lens. Instead of taking the activations at the output of one component and projecting into the output vocabulary space, SSR can find tokens in the input vocabulary space, such that once inside the model, they will trigger the targeted component. 
 
-Due to the causal nature of autoregressive transformers, our perturbation is limited to influencing only subsequent token representations. Prefix-based perturbations could alter the entire context, but would likely change the semantic meaning of the instruction itself.
-
-Unlike targeted methods such as DLA or activation patching, SSR optimization may affect multiple components simultaneously, making attribution of the exact mechanisms responsible for successful attacks nearly impossible. Future work combining SSR with more constrained optimization objectives may help isolate specific causal mechanisms.
-
-Using long suffix - approaching the length of the original prompt - induce a strong semantic drift. Attacks may achieve jailbreaking by redirecting the model to answer an entirely different question rather than the harmful instruction. For instance, Llama answered our requests about bomb making with cake recipes offering an "explosion" of flavors.
-
-The number of hyperparameters - learning rates, target layer selection, loss weightings, optimization strategies - in SSR complicates its use, while making comprehensive ablation studies impractical, and reproducibility across different model architectures challenging.
-
-The validation also becomes a challenge on itself. Unlike GCG attacks that target specific output prefixes (e.g., "Sure..."), SSR attacks produce more varied responses that require nuanced evaluation as shown in @sec:judge.
-
-As the attack is surgical, it shows extremely poor transfer rates @fig:transfer.
+We tested this method first on the refusal directions. Given a layer, a refusal direction, and an initial sentence "How to create a \[MASK\]", we applied SSR with the inverse objective as Steering-SSR: to have a high cosine similarity with the refusal direction. 
 
 
-#pagebreak()
 #figure(
-  table(
-    stroke: none,
-    columns: 5,
-    table.hline(stroke: 0.1em),
-    [To \\ From], [Qwen 2.5 1.5b], [Llama 3.2 1b], [Llama 3.2 3b], [Gemma 2 2b],
-    table.vline(stroke: 0.05em, x: 1),
-    table.hline(stroke: 0.05em),
-    [Qwen2.5 1.5b], [], [0.33], [0.13], [0.06],
-    [Llama3.2 1b], [0], [], [0], [0],
-    [Llama3.2 3b], [0], [0.16], [], [0],
-    [Gemma2 2b], [0.11], [0.06], [0], [],
-    table.hline(stroke: 0.1em),
-  ),
-  caption: [Transfer rate between models. ],
-) <fig:transfer>
+    grid(
+        columns:2,
+        image("assets/af_lens1.png"),
+        image("assets/af_lens2.png"),
+    ),
+    caption: [Two runs of _reverse_-lens with the beginning sentence: "How to create a \[MASK\]", and the refusal direction as target, using the Llama 3.2 1b model.]
+)
+
+The experiment was done with the batched version of SSR, so the optimisation yielded multiple neighbouring candidates, which explains the common theme per run. We did not go further on this task, but the result is remarkable! Projecting the direction toward the output gives tokens like "I can't", whereas taking the same refusal direction and "projecting" it backward yields slurs. It is not deterministic like its counterpart, however, on our few experiments, it achieved approximately one good run out of three, with each run converging in seconds, the method might be slightly practical. Plus, the algorithm was not designed for this task, for instance, adding perplexity might improve the results a lot.
+
+A bit of curiosity made us try the method on Sparse Auto-Encoders (SAE). By modifying the loss so that the optimisation aims to maximize the activation of one targeted latent, we can automatically construct inputs that will trigger this same latent, thus giving us an idea of the feature represented, independently of any dataset. 
+
+We choose the well-studied SAE of GPT2-small, with the attention SAE at layer 9 and the latent 20668. This latent was interpreted as a latent fireing on firearms, especially on the tokens " firearm", " firearms", " handguns", " Firearms", " handgun", " gun", " guns", "Gun", " Guns", and " NRA". This is a token-level feature latent. It can be found ... We then applied SAE on it, and exactly like the experiment with the refusal direction, it yielded inetrepretable results:
+
+#figure(
+    image("assets/af_lens3.png", width: 50%)
+)
+
+We obtained approximately one good run on five, the unsuccessful runs are the ones where the gradient gets stuck and the activation stays at 0. We did not test extensively, so we are not able to draw any conclusion apart the fact that it might be possible to add this tool to the interpreatbility toolbox. 
+
 
 == Future work
 Now that jailbreaks can be generated in a matter of seconds to minutes even on robust models, with a lot more control - not only answers starting with "Sure, here", but more general and shorter perturbations - quick iterative research on jailbreak interpreatbility becomes possible. Which may as well help attack, defense, and alignement research.
