@@ -1,5 +1,5 @@
 #import "@preview/fletcher:0.5.4" as fletcher: diagram, node, edge
-#import "sck_v2.typ": *
+#import "sck_v3.typ": *
 #import "@preview/cetz:0.3.2"
 
 #let steering = cetz.canvas({

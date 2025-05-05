@@ -121,7 +121,7 @@
 )
 
 // Conversation display function using theorem style
-#let display_conversation(user_prompt:"", assistant_name:"", assistant_response:"", orange: true) = {
+#let display_conversation(user_prompt:"", assistant_name:"", assistant_response:"", orange: true, size: 7pt, width: 50%) = {
 
   let bg_color = if orange { colors.orange.lighten(85%) } else { colors.violet.lighten(85%) }
   let border_color = if orange { colors.orange.darken(10%) } else { colors.violet.darken(10%) }
@@ -132,13 +132,14 @@
     color: border_color,
     bg_color: bg_color,
     shadow: (offset: (x: 2pt, y: 2pt), color: luma(90%)), 
+    width: width
   )
 
   //set text(size: 3pt)
 
   conversation_style[
     #format_text([
-      #set text(size: 7pt)
+      #set text(size: size)
       #{if user_prompt != "" { 
         [*User:* #user_prompt] 
       }}
@@ -152,7 +153,7 @@
     ])
   ]
 }
-#let display_conversation_(user_prompt:"", assistant_name:none, assistant_response:none, c1: colors.orange, c2: colors.violet, grad: false, angle: 77deg, width: 50%) = {
+#let display_conversation_(user_prompt:"", assistant_name:none, assistant_response:none, c1: colors.orange, c2: colors.violet, grad: false, angle: 77deg, width: 50%, size: 7pt) = {
   let border_color = c1.darken(10%)
   let bg_color = c1.lighten(85%)
 
@@ -174,7 +175,7 @@
 
   conversation_style[
     #format_text([
-      #set text(size: 7pt)
+      #set text(size: size)
       #{if user_prompt != "" { 
         [*User:* #user_prompt] 
       }}
