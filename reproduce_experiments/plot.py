@@ -1,5 +1,7 @@
 # type: ignore
 # Borrowed from https://github.com/callummcdougall/ARENA_3.0/blob/main/chapter1_transformer_interp/exercises/plotly_utils.py
+from typing import Optional
+
 import numpy as np
 import plotly.express as px
 import torch as t
@@ -79,6 +81,7 @@ def imshow(
     renderer=None,
     reverse: bool = False,
     text_size: int = 12,
+    savefig: Optional[str] = None,
     **kwargs,
 ):
     kwargs_post = {k: v for k, v in kwargs.items() if k in update_layout_set}
@@ -157,6 +160,9 @@ def imshow(
         for i in range(1, 1 + n_facets):
             xaxis_name = "xaxis" if i == 1 else f"xaxis{i}"
             fig.layout[xaxis_name]["tickangle"] = xaxis_tickangle
+
+    if savefig is not None:
+        fig.write_image(savefig)
     return (
         (fig, renderer, static)
         if return_fig
