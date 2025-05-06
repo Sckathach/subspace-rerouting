@@ -12,6 +12,6 @@ curl -fsSL https://typst.community/typst-install/install.sh | sh -s 0.12.0
 ## Use
 Compile on save:  
 ```shell
-typst watch paper/main.typ
+typst watch paper/new_version.typ
 ```
 

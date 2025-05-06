@@ -1,6 +1,6 @@
 // Import required packages
-#import "@preview/ctheorems:1.1.2": *
-#import "@preview/showybox:2.0.1": showybox
+#import "@preview/ctheorems:1.1.3": *
+#import "@preview/showybox:2.0.4": showybox
 #import "@preview/physica:0.9.4": *
 
 // Define color palette
