@@ -6,6 +6,7 @@ import tqdm
 import transformer_lens as tl
 from jaxtyping import Float
 from pydantic import PositiveInt
+from torch import Tensor
 
 from ssr import PROBES_CONFIG_PATH, PROBES_WEIGTHS_PATH
 from ssr.core import SSR, SSRConfig
@@ -181,9 +182,11 @@ class ProbeSSR(SSR):
         )
 
     def loss_fn(
-        self, activations: Float[t.Tensor, "batch_size d_model"]
-    ) -> Float[t.Tensor, "batch_size"]:
-        loss = t.zeros(activations.shape[0], 1).to(self.device)
+        self, activations: Float[Tensor, "batch_size d_model"]
+    ) -> Float[Tensor, "batch_size"]:
+        loss = t.zeros(activations.shape[0], 1).to(
+            self.device
+        )  # shape of (batch_size, 1) for the classifier
 
         for (classifier, alpha, lfn), layer in zip(
             self.probes.values(), self.config.layers
@@ -198,4 +201,6 @@ class ProbeSSR(SSR):
 
         self.act_dict = {}
 
-        return loss.squeeze(-1)
+        return loss.squeeze(
+            -1
+        )  # shape of (batch_size,) as intended for the output of loss_fn

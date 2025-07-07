@@ -7,13 +7,6 @@
 
 </div>
 
-> [!NOTE]
-> **Major SSR v4 update!** (17 Mar 25) 
-> - ~~Perturbation in suffix~~ &rarr; perturbation anywhere
-> - The core algorithm (`ssr/core.py`) does not depend on `Lens` anymore (enhanced reproducibility) 
-> - Probes and refusal directions can be stored and loaded 
-> - *Fixes and refactoring*
-
 This is the repository for *Using Mechanistic Interpretability to Craft Adversarial Attacks against Large Language Models*, it contains:
 
 - The core SSR algorithm 
@@ -22,6 +15,18 @@ This is the repository for *Using Mechanistic Interpretability to Craft Adversar
 - Utilities to run and evaluate jailbreaks 
 - Part of the generated jailbreaks 
 
+## Change log *(since paper release)*
+
+### Minor fixes (07 Jul 25)
+- Fixed shape issues in `attention/attention_ssr.py` and `steering/steering_ssr.py`.
+- Fixed cpu/cuda device issues in in `attention/attention_ssr.py` and `steering/steering_ssr.py`.
+- Added `run_ssr_attention_dazzle.ipynb`, `run_ssr_attention_full.ipynb`, `run_ssr_steering.ipynb` examples.
+
+### Major SSR v4 update (17 Mar 25)
+- ~~Perturbation in suffix~~ &rarr; perturbation anywhere.
+- The core algorithm (`ssr/core.py`) does not depend on `Lens` anymore (enhanced reproducibility).
+- Probes and refusal directions can be stored and loaded.
+- *Fixes and refactoring*.
 
 ## Installation
 > [!IMPORTANT]
@@ -116,6 +121,18 @@ This is the repository for *Using Mechanistic Interpretability to Craft Adversar
     ```
     </details>
 
+    <details>
+    <summary><i>Install everything all at once (Optional)</i></summary>
+
+
+    ```shell
+    poetry install --all-groups
+    mypy --install-types
+    ```
+    </details>
+
+
+
 
 
 3. **Add tokens**
@@ -148,14 +165,16 @@ This is the repository for *Using Mechanistic Interpretability to Craft Adversar
 
 ## Reproduce experiments 
 
-- Introduction to the `Lens` class used in the whole project: [`reproduce_experiments/using_lens.ipynb`](reproduce_experiments/using_lens.ipynb)
-- Component attribution: [`reproduce_experiments/component_attribution.ipynb`](reproduce_experiments/component_attribution.ipynb)
-- Layer differences: [`reproduce_experiments/layer_diffs.ipynb`](reproduce_experiments/layer_diffs.ipynb)
-- Evaluation: [`reproduce_experiments/run_ssr/run_ssr_probes.ipynb`](reproduce_experiments/run_ssr/run_ssr_probes.ipynb)
-- Out of distribution discussion: [`reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb`](reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb)
-- nanoGCG baseline: [`reproduce_experiments/gcg/README.md`](reproduce_experiments/gcg/README.md)
-- Multi-layer targeting: [`reproduce_experiments/multi_layers/multi_layers.ipynb`](reproduce_experiments/multi_layers/multi_layers.ipynb)
-- Using other models: _TODO_ (Check if the model is available on Transformer Lens. Add the configuration in `models.toml`)
+- Introduction to the `Lens` class used in the whole project: [`reproduce_experiments/using_lens.ipynb`](reproduce_experiments/using_lens.ipynb).
+- Component attribution: [`reproduce_experiments/component_attribution.ipynb`](reproduce_experiments/component_attribution.ipynb).
+- Layer differences: [`reproduce_experiments/layer_diffs.ipynb`](reproduce_experiments/layer_diffs.ipynb).
+- Using SSR Probe: [`reproduce_experiments/run_ssr/run_ssr_probes.ipynb`](reproduce_experiments/run_ssr/run_ssr_probes.ipynb).
+- Using SSR Steering: [`reproduce_experiments/run_ssr/run_ssr_steering.ipynb`](reproduce_experiments/run_ssr/run_ssr_steering.ipynb).
+- Using SSR Attention with Dazzle loss: [`reproduce_experiments/run_ssr/run_ssr_attention_dazzle.ipynb`](reproduce_experiments/run_ssr/run_ssr_attention_dazzle.ipynb).
+- Using SSR Attention with Dazzle, DazzleScore, Ablation, and FullAblation losses: [`reproduce_experiments/run_ssr/run_ssr_attention_full.ipynb`](reproduce_experiments/run_ssr/run_ssr_attention_full.ipynb).
+- Out of distribution discussion: [`reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb`](reproduce_experiments/out_of_distribution_discussion/steering_out_of_distribution.ipynb).
+- nanoGCG baseline: [`reproduce_experiments/gcg/README.md`](reproduce_experiments/gcg/README.md).
+- Multi-layer targeting: [`reproduce_experiments/multi_layers/multi_layers.ipynb`](reproduce_experiments/multi_layers/multi_layers.ipynb).
 
 ## Generated datasets
 Some generated datasets are available on HuggingFace: <https://huggingface.co/papers/2503.06269>. 
@@ -231,18 +250,10 @@ class Attempt(BaseModel):
     responses: List[Response]
 ```
 
-## To type or not to type, that is the eternal question
-***TLDR;** Code is messy but the main algorithm `ssr/core.py` does not depend on the rest, and should be easily understandable/ reusable.* 
+## Code structure
+The code is messy but the main algorithm `ssr/core.py` does not depend on the rest, and should be easily understandable/ reusable.
 
-Coming from the world of typed languages, I was very quickly tempted to make beautiful abstract classes, beautiful generic functions, and to type absolutely all my code. However, as was kindly pointed out to me during my first research internship, development is not research. And I completely agree with that. It's the experiences that are important, not the beauty of the code. What's more, I've changed a lot over the last few months, and I'm now convinced that excellent code is **short**, **simple** and **understandable**. 
-
-However, after 2000 lines of untyped, classless python, I've realised that I just can't keep coding in this mess. So I've taken the time to type everything, without getting too fancy. The result is a bit messy, but at least Ruff is happy, and I get proper autocompletions. 
-
-To keep it readable, I've made sure that my main algorithm can be summed up in one script (`ssr/core.py`), with no dependencies on the rest of my work, so that it can be easily reused. For the rest, I advise you to rewrite an implementation that suits your needs instead of trying to copy and paste one of mine. 
-
-If you want to understand/ reuse something other than `ssr/core.py`, take a look at the notebook `reproduce_experiments/using_lens.ipynb`.
-
-I've drawn up a dependency graph to help you see things more clearly: 
+Other experiments rely on a custom `Lens` class, with lots of helpers. I've drawn up a dependency graph to help you see things more clearly:
 ![dependency graph](/assets/graph.svg)
 
 ## Trouble shooting 

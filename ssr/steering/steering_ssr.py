@@ -5,6 +5,7 @@ import torch as t
 import transformer_lens as tl
 from jaxtyping import Float
 from pydantic import PositiveInt
+from torch import Tensor
 
 from ssr import REFUSAL_DIRECTIONS_PATH
 from ssr.core import SSR, SSRConfig
@@ -54,7 +55,7 @@ class SteeringSSR(SSR):
             print("WARNING: layers is empty")
 
     def hook_fn(self, activations, hook):
-        self.act_dict[hook.name] = activations.cpu()
+        self.act_dict[hook.name] = activations
         return activations
 
     def load_refusal_directions(self, refusal_direction_path: str):
@@ -113,11 +114,11 @@ class SteeringSSR(SSR):
         )
 
     def decompose(
-        self, activations: Float[t.Tensor, "... d_model"], layer: int
+        self, activations: Float[Tensor, "... d_model"], layer: int
     ) -> Tuple[
-        Float[t.Tensor, "... d_model"],
-        Float[t.Tensor, "... d_model"],
-        Float[t.Tensor, "... 1"],
+        Float[Tensor, "... d_model"],
+        Float[Tensor, "... d_model"],
+        Float[Tensor, "... 1"],
     ]:
         proj_scal = einops.einsum(
             activations,
@@ -130,8 +131,10 @@ class SteeringSSR(SSR):
 
         return proj, proj_orth, proj_scal
 
-    def loss_fn(self, activations) -> Float[t.Tensor, "batch 1"]:
-        loss = t.zeros(activations.shape[0]).cpu()
+    def loss_fn(
+        self, activations: Float[Tensor, "batch_size d_model"]
+    ) -> Float[Tensor, "batch_size"]:
+        loss = t.zeros(activations.shape[0]).to(self.device)
 
         for s, layer in zip(self.config.alphas, self.config.layers):
             act_name = tl.utils.get_act_name(self.config.pattern, layer)
@@ -143,4 +146,4 @@ class SteeringSSR(SSR):
 
         self.act_dict = {}
 
-        return loss.unsqueeze(-1)
+        return loss

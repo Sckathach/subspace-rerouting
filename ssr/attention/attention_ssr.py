@@ -4,6 +4,7 @@ import torch as t
 import transformer_lens as tl
 from jaxtyping import Float
 from pydantic import BaseModel
+from torch import Tensor
 
 from ssr.core import SSR, SSRConfig
 from ssr.types import HookList
@@ -50,7 +51,7 @@ class AttentionSSR(SSR):
 
         self.config: AttentionSSRConfig = config
 
-        self.act_dict: Dict[str, t.Tensor] = {}
+        self.act_dict: Dict[str, Tensor] = {}
         self.fwd_hooks: HookList = []
 
         self.setup_hooks()
@@ -78,13 +79,13 @@ class AttentionSSR(SSR):
         )
 
     def hook_fn(self, activations, hook):
-        self.act_dict[hook.name] = activations.cpu()
+        self.act_dict[hook.name] = activations
         return activations
 
     def loss_fn(
-        self, activations: Float[t.Tensor, "batch_size d_model"]
-    ) -> Float[t.Tensor, "batch_size"]:
-        loss = t.zeros(activations.shape[0], 1)
+        self, activations: Float[Tensor, "batch_size d_model"]
+    ) -> Float[Tensor, "batch_size"]:
+        loss = t.zeros(activations.shape[0]).to(self.device)
 
         for intervention in self.config.interventions:
             if isinstance(intervention, Dazzle):
@@ -141,11 +142,11 @@ class AttentionSSR(SSR):
                     ],
                     dim=-1,
                     ord=2,
-                )
+                ).sum(-1)
 
             else:
                 raise TypeError(f"Intervention type {type(intervention)} invalid")
 
         self.act_dict = {}
 
-        return loss.unsqueeze(-1)
+        return loss
