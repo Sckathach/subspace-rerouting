@@ -90,14 +90,14 @@
 #let probe_vertical = diagram(
   debug:1, 
   spacing: (15pt, 25pt),
-  neurone((0, 1), name: <n1>),
-  neurone((0, 2), name: <n2>),
+  neurone((0, 0), name: <n1>),
+  neurone((0, 1), name: <n2>),
   //neurone((0, 2), name: <n2>, tint: colors.orange, fill: gradient.linear(colors.orange, colors.violet)),
-  neurone((0, 3), name: <n3>),
-  neurone((0, 4), name: <n4>),
-  neurone((0, 5), name: <n5>),
+  neurone((0, 2), name: <n3>),
+  neurone((0, 3), name: <n4>),
+  neurone((0, 4), name: <n5>),
   
-  neurone((1, 3), name: <sig>),
+  neurone((1, 2), name: <sig>),
 
   edge(<n1>, <sig>),
   edge(<n2>, <sig>),
@@ -107,14 +107,14 @@
 )
 #let probe = diagram(
   spacing: (15pt, 25pt),
-  neurone((1, 0), name: <n1>),
-  neurone((2, 0), name: <n2>),
+  neurone((0, 0), name: <n1>),
+  neurone((1, 0), name: <n2>),
   //neurone((0, 2), name: <n2>, tint: colors.orange, fill: gradient.linear(colors.orange, colors.violet)),
-  neurone((3, 0), name: <n3>),
-  neurone((4, 0), name: <n4>),
-  neurone((5, 0), name: <n5>),
+  neurone((2, 0), name: <n3>),
+  neurone((3, 0), name: <n4>),
+  neurone((4, 0), name: <n5>),
   
-  neurone((3, -1), name: <sig>),
+  neurone((2, -1), name: <sig>),
 
   edge(<n1>, <sig>),
   edge(<n2>, <sig>),
@@ -211,7 +211,7 @@
   edge((6, 6.5), (6.1, 6.5), "<<--"),
   node((3, 6.5), [], stroke: 1pt, name: <ra>, fill: black, radius: 1pt),
  
-  blob_resid((0,0.2), [logits], tint: red),
+  blob_resid((0,0), [logits], tint: red),
   edge("<|-"),
   blob_resid((0,1), [unembed], tint: red),
   edge("<|--/--", label: align(right, text("\n\nThe forward pass is\nstopped after the last\nintervention layer.", size: text_size)), label-sep: 1.5em),

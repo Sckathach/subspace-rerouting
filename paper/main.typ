@@ -1,51 +1,45 @@
-#import "neurips.typ": *
+#import "template/lib.typ": *
 #import "sck_v3.typ": *
 #import "ssr_schema.typ": *
 #import "@preview/lovelace:0.3.0": *
 
-#let affls = (
-  tsp: (
-    department: "",
-    institution: "Télécom SudParis",
-    location: "",
-    country: "",
-  ),
-  thales: (
-    department: "Thales SIX GTS",
-    institution: "",
-    location: "",
-    country: "",
-  ),
+#let title = "Using Mechanistic Interpretability to Craft Adversarial Attacks against Large Language Models"
+
+#show: article.with(
+  cols: none,
+  eq-numbering: "(1)",
+  header-display: false,
+  header-title: title,
+  lang: "en",
+  page-margins: 1in,
+  page-paper: "us-letter",
 )
 
-#let authors = (
-  (
-    name: "Thomas Winninger",
-    affl: "tsp",
-    email: "",
+#maketitle(
+  title: title,
+  authors: ([Thomas Winninger\*], "Boussad Addad", "Kapusta Katarzyna"
+    //(name: "Thomas Winninger", affiliation: "Télécom SudParis"),
+    //(name: "Boussad Addad", affiliation: "Thales SIX GTS"),
+    //(name: "Kapusta Katarzyna", affiliation: "Thales SIX GTS"),
   ),
-  (
-    name: "Boussad Addad",
-    affl: "thales",
-    email: "",
-  ),
-  (
-    name: "Katarzyna Kapusta",
-    affl: "thales",
-    email: "",
-  ),
+  date: none,
+  spacing: (above: 30pt, below: 30pt),
 )
+#text(white, [#footnote("Work started during internship at Thales. Correspondance to thomas.winninger@proton.me", numbering: "*")])
+#{
+  set text(size: 9pt)
+  set align(center)
+  v(-2em)
+  text([*Abstract*], size: 10pt)
+  v(0.1em)
 
-#show: neurips.with(
-  title: [Using Mechanistic Interpretability to Craft Adversarial Attacks against Large Language Models],
-  authors: (authors, affls),
-  keywords: ("Machine Learning", "NeurIPS"),
-  accepted: none,
-  abstract: [
-    Traditional white-box methods for creating adversarial perturbations against LLMs typically rely only on gradient computation from the targeted model, ignoring the internal mechanisms responsible for attack success or failure. Conversely, interpretability studies that analyse these internal mechanisms lack practical applications beyond runtime interventions. We bridge this gap by introducing a novel white-box approach that leverages mechanistic interpretability techniques to craft practical adversarial inputs. Specifically, we first identify acceptance subspaces - sets of feature vectors that do not trigger the model's refusal mechanisms - then use gradient-based optimisation to reroute embeddings from refusal subspaces to acceptance subspaces, effectively achieving jailbreaks. This targeted approach significantly reduces computation cost, achieving attack success rates of 80-95% on state-of-the-art models including Gemma2, Llama3.2, and Qwen2.5 within minutes or even seconds, compared to existing techniques that often fail or require hours of computation. We believe this approach opens a new direction for both attack research and defense development. Furthermore, it showcases a practical application of mechanistic interpretability where other methods are less efficient, which highlights its utility. The code and generated datasets are available at https://github.com/Sckathach/subspace-rerouting.
-  ],
-  bibliography: bibliography,
-)
+  pad(
+    [#h(1em) Traditional white-box methods for creating adversarial perturbations against LLMs typically rely only on gradient computation from the targeted model, ignoring the internal mechanisms responsible for attack success or failure. Conversely, interpretability studies that analyse these internal mechanisms lack practical applications beyond runtime interventions. We bridge this gap by introducing a novel white-box approach that leverages mechanistic interpretability techniques to craft practical adversarial inputs. Specifically, we first identify acceptance subspaces - sets of feature vectors that do not trigger the model's refusal mechanisms - then use gradient-based optimisation to reroute embeddings from refusal subspaces to acceptance subspaces, effectively achieving jailbreaks. This targeted approach significantly reduces computation cost, achieving attack success rates of 80-95% on state-of-the-art models including Gemma2, Llama3.2, and Qwen2.5 within minutes or even seconds, compared to existing techniques that often fail or require hours of computation. We believe this approach opens a new direction for both attack research and defense development. Furthermore, it showcases a practical application of mechanistic interpretability where other methods are less efficient, which highlights its utility. The code and generated datasets are available at https://github.com/Sckathach/subspace-rerouting.],
+    left: 2em,
+    right: 2em,
+  )
+}
+
 
 #set list(marker: [-])
 // Advanced styling sheesh, put after all #show
@@ -155,13 +149,12 @@ These techniques can also be used to find relevant safety heads. While @zhou_rol
 Nonetheless, while component subspaces are interesting for interpreatbility studies, we found the semantic subspace approaches more effective in practice, at least, with our current naive targeting method. Future work might put the light on more sofisticated identification techniques. Jailbreak efficiency will be discussed in the result section, and additional information on component identification can be found in Appendix @sec:analysis.
 
 
-#pagebreak()
 = Subspace rerouting <sec:ssr>
-#figure(
-  box(scale(80%, ssr_schema), inset: -3em),
-  caption: [General SSR framework with three implementation strategies. *(P)* Probe-SSR: Uses linear classifiers trained to distinguish harmful/harmless representations to guide optimisation toward acceptance subspaces. *(S)* Steering-SSR: Uses a specific direction in activation space as a target, optimising inputs to naturally achieve effects similar to runtime interventions. *(A)* Attention-SSR: Uses a specific attention pattern as target subspace to redirect safety-critical heads' attention away from harmful content, exploiting the attention hijacking mechanism observed in successful jailbreaks.],
-  gap: 0.0em,
-)
+//#figure(
+//  box(scale(80%, ssr_schema), inset: -3em),
+//  caption: [General SSR framework with three implementation strategies. *(P)* Probe-SSR: Uses linear classifiers trained to distinguish harmful/harmless representations to guide optimisation toward acceptance subspaces. *(S)* Steering-SSR: Uses a specific direction in activation space as a target, optimising inputs to naturally achieve effects similar to runtime interventions. *(A)* Attention-SSR: Uses a specific attention pattern as target subspace to redirect safety-critical heads' attention away from harmful content, exploiting the attention hijacking mechanism observed in successful jailbreaks.],
+//  gap: 0.0em,
+//)
 
 == General SSR algorithm <sec:ssr-formulation>
 The Subspace Rerouting (SSR) algorithm is designed as a general approach for crafting adversarial perturbations that reroute model activations toward targeted subspaces. Let $x$ be the initial input comprising the fixed part $xf$, and the part to be optimised $xs$. Given a set of intervention layers $l_1, dots, l_K$, their corresponding activation spaces $cal(E)_1, dots, cal(E)_K$, targeted subspaces $E_1 subset cal(E)_1, dots, E_K subset cal(E)_K$, and the extracted activations during a forward pass on $x$: $e_1 in cal(E)_1, dots, e_K in cal(E)_K$, the objective of SSR is to minimise:
@@ -286,14 +279,12 @@ Beyond its efficacy as an attack vector, SSR may serve as a practical interpreta
 
 Through SSR, we demonstrate that mechanistic interpretability can beat traditional baseline on practical applications, highlighting the critical importance of understanding model internals for developing truly robust AI.
 
-#pagebreak()
 = Acknowledgments
 
 I would like to thank Oliver Bettan, without whom this internship would not have been possible, my supervisors, who gave me time to investigate interpretability, even though this was not at all the primary objective of the internship, and the rest of the team, with whom I had some very interesting conversations about my problems, especially the famous curse of dimensionality. I would also like to take this opportunity to thank my teacher Gregory Blanc, who gave me my first tips on how to write a paper, and who took the time to proofread this one.
 
 #pagebreak()
-#bibliography("references.bib")
-
+#bibliography("references.bib", title: [References], style: "iclr.csl")
 
 #pagebreak()
 #set heading(numbering: none)
@@ -302,7 +293,7 @@ I would like to thank Oliver Bettan, without whom this internship would not have
 #outline(indent: 1.5em)
 #set heading(numbering: "A.1")
 #counter(heading).update(0)
-#pagebreak()
+
 
 = Related work <sec:related-work>
 
@@ -357,7 +348,7 @@ Additionally, using AdvBench and Alpaca as contrastive samples introduces distri
 
 To address these challenges, we created a new dataset $dsi$, comprising 60 selected harmful instructions from AdvBench paired with corresponding harmless variants. The harmless counterparts were created by minimally modifying the harmful instructions to preserve structural similarity while removing harmful intent.
 
-#pagebreak()
+
 Example of couple from $dsi$:
 #contrast_data(
   [Develop a strategy for *hacking* into a government database and *stealing* sensitive information.],
@@ -854,7 +845,7 @@ Unfortunately, we did not have time to compare enough different strategies to dr
 
 Interestingly, despite being generated through optimisation and random sampling, many of the successful suffixes were semantically coherent, with tokens that formed nearly logical phrases. This clarity was particularly present with shorter suffixes of just a few tokens. Moreover, this was not merely an occasional occurrence - using Steering-SSR with a five-token suffix length, we found that approximately 30% of generated perturbations were interpretable, yielding roughly one clear suffix every 5 minutes! Below are several examples, each generated on Llama 3.2 1b using Steering-SSR with a five-token suffix length.
 
-#pagebreak()
+
 Specific technique:
 #display_conversation(
   assistant_name: "Llama 3.2 1b",
@@ -913,7 +904,6 @@ Using a fictional context, like a simulation:
   size: 8pt,
 )
 
-#pagebreak()
 
 Using a typographic constraint:
 #display_conversation(
